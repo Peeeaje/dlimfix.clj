@@ -39,10 +39,15 @@
       (is (str/includes? (:output result) "File not found")))))
 
 (deftest run-no-mode-specified
-  (testing "No --list or --fix returns error"
+  (testing "No --list or --fix defaults to list mode"
     (let [result (core/run {:file "test-resources/valid.clj"})]
+      (is (= 0 (:code result)))
+      (is (= "No missing end delimiters found." (:output result)))))
+
+  (testing "No mode with missing delimiter file returns candidates"
+    (let [result (core/run {:file "test-resources/single-missing.txt"})]
       (is (= 1 (:code result)))
-      (is (= "Specify --list or --fix" (:output result))))))
+      (is (str/includes? (:output result) "Missing end delimiter")))))
 
 (deftest run-fix-with-numeric-position
   (testing "--fix with numeric position parsed as integer (before CLI coercion)"

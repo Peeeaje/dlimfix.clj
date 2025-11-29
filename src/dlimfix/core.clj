@@ -119,9 +119,12 @@
                        :backup-path backup})))))
 
 (defn- print-usage []
-  (println "Usage: dlimfix [--list|--fix] <file.clj>")
+  (println "Usage: dlimfix [options] <file.clj>")
+  (println "")
+  (println "By default, shows candidate positions for missing delimiters.")
+  (println "")
   (println "Options:")
-  (println "  --list           Show candidate positions")
+  (println "  --list           Show candidate positions (default)")
   (println "  --fix -p <ID>    Apply fix at position ID")
   (println "  --dry-run        Show diff without modifying")
   (println "  --out <file>     Write to different file")
@@ -129,22 +132,19 @@
 
 (defn run
   "Main logic without System/exit. Returns {:output :code}."
-  [{:keys [list fix file] :as opts}]
+  [{:keys [fix file] :as opts}]
   (cond
     (nil? file)
     (do (print-usage)
         {:output nil :code 1})
 
-    (not (or list fix))
-    {:output "Specify --list or --fix" :code 1}
-
     :else
     (let [parsed (read-and-parse file)]
       (if (:error parsed)
         {:output (:error parsed) :code (:code parsed)}
-        (if list
-          (handle-list parsed)
-          (handle-fix parsed opts))))))
+        (if fix
+          (handle-fix parsed opts)
+          (handle-list parsed))))))
 
 (defn -main
   "CLI entry point."
