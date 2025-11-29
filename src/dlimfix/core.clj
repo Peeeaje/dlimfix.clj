@@ -48,7 +48,8 @@
   [{:keys [source file-path modified dry-run out-path backup-path]}]
   (cond
     dry-run
-    {:output (output/format-diff source modified file-path) :code 0}
+    (let [diff (output/format-diff source modified file-path)]
+      {:output (or diff "No changes needed.") :code 0})
 
     out-path
     (do (spit out-path modified :encoding "UTF-8")

@@ -1,6 +1,6 @@
 {:paths ["src"]
  :deps {org.clojure/clojure {:mvn/version "1.12.0"}
-        borkdude/edamame {:mvn/version "1.4.27"}
+        borkdude/edamame {:mvn/version "1.4.29"}
         org.babashka/cli {:mvn/version "0.8.62"}}
  :aliases
  {:run {:main-opts ["-m" "dlimfix.core"]}

@@ -10,7 +10,7 @@
    - {:error message} on fatal parse error"
   [source]
   (try
-    {:ok (e/parse-string-all source {:all true})}
+    {:ok (e/parse-string-all source {:all true :end-location true})}
     (catch Exception ex
       (let [data (ex-data ex)]
         (if-let [expected (:edamame/expected-delimiter data)]
