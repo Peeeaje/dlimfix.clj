@@ -319,51 +319,68 @@
       :else
       (+ 2000 (- opened-row row)))))
 
+(defn- try-deletion
+  "Try deleting the extra delimiter at mismatched position. Returns candidate.
+   Always returns a candidate since deleting an extra delimiter is a valid fix."
+  [source {:keys [row col]}]
+  (when-let [offset (fixer/row-col->offset source row col)]
+    {:pos {:row row :col col :offset offset}
+     :context (str "delete '" (get source offset) "' at")
+     :type :delete}))
+
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
    missing: {:expected \")\" :opened \"(\" :opened-loc {:row :col}
              :mismatched-loc {:row :col} :found \"]\"}
    source: the original source string
-   Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\" :type :insert/:replace}]"
+   Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\" :type :insert/:replace/:delete}]"
   [{:keys [expected opened-loc mismatched-loc found] :as missing} source]
-  (if-not opened-loc
-    ;; If opened-loc is completely nil, return empty candidates
-    []
-    (let [start-row (:row opened-loc)
-          start-col (:col opened-loc)]
-      (if (or (nil? start-row) (nil? start-col))
-        ;; If row or col is nil (e.g., extra closing delimiter), return empty candidates
-        []
-        (let [lines (vec (str/split source #"\n" -1))
-              total-lines (count lines)
-              ;; Generate replacement candidate if there's a mismatched delimiter
-              replace-candidate (when (and mismatched-loc found)
-                                  (try-replacement source expected missing lines mismatched-loc))
-              ;; Line-end positions for ALL lines (to find positions before opened-loc too)
-              end-positions (line-end-positions lines 1)
-              ;; Intra-line positions for ALL lines from line 1 to the last line
-              ;; This allows finding candidates before the reported opened-loc
-              mid-positions (all-intra-line-positions lines 1 total-lines 1 expected)
-              ;; Combine all positions, prioritizing mismatched delimiters
-              priority-positions (filter :priority mid-positions)
-              regular-positions (remove :priority mid-positions)
-              positions (concat priority-positions regular-positions end-positions)
-              ;; First pass: collect all valid candidates with their offsets
-              raw-candidates (->> positions
-                                  (keep #(try-insert-at source expected missing lines %))
-                                  (distinct-by #(get-in % [:pos :offset]))
-                                  (map #(assoc % :type :insert)))
-              ;; Collect offsets for redundancy check
-              offsets-seen (set (map #(get-in % [:pos :offset]) raw-candidates))
-              ;; Second pass: filter out redundant EOF candidates
-              insert-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
-                                        raw-candidates)
-              ;; Sort candidates by priority (closer to opened-loc/mismatched-loc = higher priority)
-              sorted-candidates (sort-by #(candidate-priority % opened-loc mismatched-loc)
-                                         insert-candidates)]
-          ;; Replacement candidate comes first if available
-          (->> (if replace-candidate
-                 (cons replace-candidate sorted-candidates)
-                 sorted-candidates)
-               assign-ids
-               vec))))))
+  (let [lines (vec (str/split source #"\n" -1))
+        has-opened-loc? (and opened-loc
+                             (:row opened-loc)
+                             (:col opened-loc))]
+    (cond
+      ;; Extra closing delimiter case - suggest deletion
+      (and (not has-opened-loc?) mismatched-loc)
+      (if-let [delete-candidate (try-deletion source mismatched-loc)]
+        (assign-ids [delete-candidate])
+        [])
+
+      ;; No opened-loc at all - return empty
+      (not has-opened-loc?)
+      []
+
+      ;; Normal case - missing delimiter
+      :else
+      (let [total-lines (count lines)
+            ;; Generate replacement candidate if there's a mismatched delimiter
+            replace-candidate (when (and mismatched-loc found)
+                                (try-replacement source expected missing lines mismatched-loc))
+            ;; Line-end positions for ALL lines (to find positions before opened-loc too)
+            end-positions (line-end-positions lines 1)
+            ;; Intra-line positions for ALL lines from line 1 to the last line
+            ;; This allows finding candidates before the reported opened-loc
+            mid-positions (all-intra-line-positions lines 1 total-lines 1 expected)
+            ;; Combine all positions, prioritizing mismatched delimiters
+            priority-positions (filter :priority mid-positions)
+            regular-positions (remove :priority mid-positions)
+            positions (concat priority-positions regular-positions end-positions)
+            ;; First pass: collect all valid candidates with their offsets
+            raw-candidates (->> positions
+                                (keep #(try-insert-at source expected missing lines %))
+                                (distinct-by #(get-in % [:pos :offset]))
+                                (map #(assoc % :type :insert)))
+            ;; Collect offsets for redundancy check
+            offsets-seen (set (map #(get-in % [:pos :offset]) raw-candidates))
+            ;; Second pass: filter out redundant EOF candidates
+            insert-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
+                                      raw-candidates)
+            ;; Sort candidates by priority (closer to opened-loc/mismatched-loc = higher priority)
+            sorted-candidates (sort-by #(candidate-priority % opened-loc mismatched-loc)
+                                       insert-candidates)]
+        ;; Replacement candidate comes first if available
+        (->> (if replace-candidate
+               (cons replace-candidate sorted-candidates)
+               sorted-candidates)
+             assign-ids
+             vec)))))

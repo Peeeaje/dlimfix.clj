@@ -30,6 +30,11 @@
   [source offset new-char]
   (str (subs source 0 offset) new-char (subs source (inc offset))))
 
+(defn delete-at
+  "Delete a single character at the given 0-indexed offset."
+  [source offset]
+  (str (subs source 0 offset) (subs source (inc offset))))
+
 (defn replace-delimiter
   "Replace a delimiter at the specified row/col position.
    Returns the modified source string, or nil if position is invalid."

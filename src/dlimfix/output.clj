@@ -10,7 +10,10 @@
 (defn- format-candidate
   "Format a single candidate line."
   [{:keys [id pos context type]}]
-  (let [action (if (= type :replace) "replace at" "after")]
+  (let [action (case type
+                 :replace "replace at"
+                 :delete "delete at"
+                 "after")]
     (format "  %s) %s line %d, col %d: %s"
             id action (:row pos) (:col pos)
             (if (str/blank? context) "[EOF]" context))))
@@ -18,9 +21,15 @@
 (defn format-list
   "Format candidate list for --list output."
   [{:keys [expected opened opened-loc mismatched-loc found]} candidates]
-  (let [header (format "Missing end delimiter: %s (to close '%s' at line %d, col %d)"
-                       expected opened (:row opened-loc) (:col opened-loc))
-        mismatch-hint (when (and mismatched-loc found)
+  (let [extra-closer? (and (or (nil? opened-loc)
+                               (nil? (:row opened-loc)))
+                           mismatched-loc)
+        header (if extra-closer?
+                 (format "Extra closing delimiter '%s' at line %d, col %d"
+                         found (:row mismatched-loc) (:col mismatched-loc))
+                 (format "Missing end delimiter: %s (to close '%s' at line %d, col %d)"
+                         expected opened (:row opened-loc) (:col opened-loc)))
+        mismatch-hint (when (and (not extra-closer?) mismatched-loc found)
                         (format "Hint: Found '%s' at line %d, col %d - consider replacing with '%s'"
                                 found (:row mismatched-loc) (:col mismatched-loc) expected))]
     (->> candidates

@@ -80,6 +80,34 @@
       (is (vector? cands))
       (is (= 0 (count cands))))))
 
+(deftest extra-closing-delimiter-deletion
+  (testing "Extra ] with no opening - should suggest deletion"
+    (let [source "(ns example)\n\nfoo])"
+          missing {:expected "" :opened "" :opened-loc {:row nil :col nil}
+                   :mismatched-loc {:row 3 :col 4} :found "]"}
+          cands (candidates/generate-candidates missing source)]
+      (is (= 1 (count cands)))
+      (let [cand (first cands)]
+        (is (= :delete (:type cand)))
+        (is (= 3 (get-in cand [:pos :row])))
+        (is (= 4 (get-in cand [:pos :col]))))))
+
+  (testing "Extra ) with no opening - should suggest deletion"
+    (let [source "(def x 1)\n)"
+          missing {:expected "" :opened "" :opened-loc {:row nil :col nil}
+                   :mismatched-loc {:row 2 :col 1} :found ")"}
+          cands (candidates/generate-candidates missing source)]
+      (is (= 1 (count cands)))
+      (is (= :delete (:type (first cands))))))
+
+  (testing "Extra } with no opening - should suggest deletion"
+    (let [source "{:a 1}\n}"
+          missing {:expected "" :opened "" :opened-loc {:row nil :col nil}
+                   :mismatched-loc {:row 2 :col 1} :found "}"}
+          cands (candidates/generate-candidates missing source)]
+      (is (= 1 (count cands)))
+      (is (= :delete (:type (first cands)))))))
+
 (deftest require-vector-missing-bracket
   (testing "Missing ] after :as alias should not split tokens"
     (let [source "(:require [clojure.set :as set]\n            [clojure.string :as str))"
