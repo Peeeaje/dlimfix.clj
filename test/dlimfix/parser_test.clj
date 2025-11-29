@@ -60,3 +60,17 @@
   (testing "#_ discard form is handled"
     (let [result (parser/parse-string "(+ 1 #_(2 3) 4)")]
       (is (:ok result)))))
+
+(deftest parse-auto-gensym
+  (testing "auto-gensym (#) in syntax quote is handled"
+    (let [result (parser/parse-string "`(let [x# 1] x#)")]
+      (is (:ok result)))
+    (let [result (parser/parse-string "`(let [x# 1")]
+      (is (:missing result))
+      (is (= "]" (get-in result [:missing :expected]))))))
+
+(deftest parse-namespace-qualified-keyword
+  (testing "namespace-qualified keyword (::) requires auto-resolve"
+    (let [result (parser/parse-string "(ns test.ns) ::keyword")]
+      (is (:ok result))
+      (is (seq (:ok result))))))
