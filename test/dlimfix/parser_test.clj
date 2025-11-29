@@ -74,3 +74,25 @@
     (let [result (parser/parse-string "(ns test.ns) ::keyword")]
       (is (:ok result))
       (is (seq (:ok result))))))
+
+(deftest parse-mismatched-closer
+  (testing "Mismatched ] instead of ) is detected"
+    (let [result (parser/parse-string "(+ acc item]")]
+      (is (:missing result))
+      (is (= ")" (get-in result [:missing :expected])))
+      (is (= {:row 1 :col 12} (get-in result [:missing :mismatched-loc])))
+      (is (= "]" (get-in result [:missing :found])))))
+
+  (testing "Mismatched ) instead of ] is detected"
+    (let [result (parser/parse-string "[a b c)")]
+      (is (:missing result))
+      (is (= "]" (get-in result [:missing :expected])))
+      (is (= {:row 1 :col 7} (get-in result [:missing :mismatched-loc])))
+      (is (= ")" (get-in result [:missing :found])))))
+
+  (testing "Mismatched } instead of ) is detected"
+    (let [result (parser/parse-string "(fn [x] x}")]
+      (is (:missing result))
+      (is (= ")" (get-in result [:missing :expected])))
+      (is (= {:row 1 :col 10} (get-in result [:missing :mismatched-loc])))
+      (is (= "}" (get-in result [:missing :found]))))))

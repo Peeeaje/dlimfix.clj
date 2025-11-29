@@ -25,6 +25,18 @@
   (when-let [offset (row-col->offset source row col)]
     (insert-at source offset delimiter)))
 
+(defn replace-at
+  "Replace a single character at the given 0-indexed offset."
+  [source offset new-char]
+  (str (subs source 0 offset) new-char (subs source (inc offset))))
+
+(defn replace-delimiter
+  "Replace a delimiter at the specified row/col position.
+   Returns the modified source string, or nil if position is invalid."
+  [source row col new-delimiter]
+  (when-let [offset (row-col->offset source row col)]
+    (replace-at source offset new-delimiter)))
+
 (defn apply-fix
   "Apply a fix by candidate ID.
    candidates is a seq of {:id \"1\" :pos {:row :col :offset} ...}
@@ -34,3 +46,11 @@
     (let [offset (get-in candidate [:pos :offset])]
       {:ok (insert-at source offset delimiter)})
     {:error (str "Unknown position ID: " position-id)}))
+
+(defn apply-replacement
+  "Apply a replacement fix.
+   Returns {:ok modified-source} or {:error message}"
+  [source row col new-delimiter]
+  (if-let [modified (replace-delimiter source row col new-delimiter)]
+    {:ok modified}
+    {:error (format "Invalid position: line %d, col %d" row col)}))

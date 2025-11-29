@@ -75,7 +75,17 @@
     :else
     (let [{:keys [expected] :as missing} (:missing result)
           cands (candidates/generate-candidates missing source)
-          fix-result (fixer/apply-fix source cands position expected)]
+          candidate (first (filter #(= (:id %) position) cands))
+          fix-result (if candidate
+                       (if (= (:type candidate) :replace)
+                         ;; Replace the mismatched delimiter
+                         (fixer/apply-replacement source
+                                                  (get-in candidate [:pos :row])
+                                                  (get-in candidate [:pos :col])
+                                                  expected)
+                         ;; Insert the delimiter
+                         (fixer/apply-fix source cands position expected))
+                       {:error (str "Unknown position ID: " position)})]
       (if (:error fix-result)
         {:output (:error fix-result) :code 1}
         (write-output {:source source

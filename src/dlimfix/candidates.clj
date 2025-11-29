@@ -189,12 +189,23 @@
   [candidates]
   (map-indexed (fn [i c] (assoc c :id (str (inc i)))) candidates))
 
+(defn- try-replacement
+  "Try replacing delimiter at mismatched position. Returns candidate or nil."
+  [source expected missing lines {:keys [row col]}]
+  (when-let [offset (fixer/row-col->offset source row col)]
+    (let [test-source (fixer/replace-at source offset expected)]
+      (when (valid-or-different? test-source missing)
+        {:pos {:row row :col col :offset offset}
+         :context (str/trim (or (get lines (dec row)) ""))
+         :type :replace}))))
+
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
-   missing: {:expected \")\" :opened \"(\" :opened-loc {:row :col}}
+   missing: {:expected \")\" :opened \"(\" :opened-loc {:row :col}
+             :mismatched-loc {:row :col} :found \"]\"}
    source: the original source string
-   Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\"}]"
-  [{:keys [expected opened-loc] :as missing} source]
+   Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\" :type :insert/:replace}]"
+  [{:keys [expected opened-loc mismatched-loc found] :as missing} source]
   (if-not opened-loc
     ;; If opened-loc is completely nil, return empty candidates
     []
@@ -204,6 +215,9 @@
         ;; If row or col is nil (e.g., extra closing delimiter), return empty candidates
         []
         (let [lines (vec (str/split source #"\n" -1))
+              ;; Generate replacement candidate if there's a mismatched delimiter
+              replace-candidate (when (and mismatched-loc found)
+                                  (try-replacement source expected missing lines mismatched-loc))
               ;; Line-end positions for all lines from start-row
               end-positions (line-end-positions lines start-row)
               ;; Intra-line positions for the line containing the opened delimiter
@@ -212,9 +226,14 @@
               ;; Combine all positions, prioritizing mismatched delimiters
               priority-positions (filter :priority mid-positions)
               regular-positions (remove :priority mid-positions)
-              positions (concat priority-positions regular-positions end-positions)]
-          (->> positions
-               (keep #(try-insert-at source expected missing lines %))
-               (distinct-by #(get-in % [:pos :offset]))
+              positions (concat priority-positions regular-positions end-positions)
+              insert-candidates (->> positions
+                                     (keep #(try-insert-at source expected missing lines %))
+                                     (distinct-by #(get-in % [:pos :offset]))
+                                     (map #(assoc % :type :insert)))]
+          ;; Replacement candidate comes first if available
+          (->> (if replace-candidate
+                 (cons replace-candidate insert-candidates)
+                 insert-candidates)
                assign-ids
                vec))))))

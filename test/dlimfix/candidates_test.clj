@@ -95,6 +95,35 @@
       (let [bad-positions (filter #(contains? #{28 32} (get-in % [:pos :col])) cands)]
         (is (empty? bad-positions) "Should not generate candidates that split :as forms")))))
 
+(deftest mismatched-closer-replacement
+  (testing "BUG-004: Wrong closer type should generate replacement candidate first"
+    (let [source "(+ acc item]"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}
+                   :mismatched-loc {:row 1 :col 12} :found "]"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be a replacement
+      (let [first-cand (first cands)]
+        (is (= :replace (:type first-cand)) "First candidate should be a replacement")
+        (is (= 12 (get-in first-cand [:pos :col])) "Replacement should be at col 12"))))
+
+  (testing "Mismatched } instead of ] generates replacement"
+    (let [source "[a b c}"
+          missing {:expected "]" :opened "[" :opened-loc {:row 1 :col 1}
+                   :mismatched-loc {:row 1 :col 7} :found "}"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      (let [first-cand (first cands)]
+        (is (= :replace (:type first-cand))))))
+
+  (testing "No mismatched closer - only insert candidates"
+    (let [source "(+ 1 2"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; All should be insert type
+      (is (every? #(= :insert (:type %)) cands)))))
+
 (deftest mismatched-delimiter-priority
   (testing "Mismatched ] instead of ) - position before ] should be first"
     (let [source "result (+ x y z]"
