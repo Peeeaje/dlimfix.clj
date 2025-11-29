@@ -24,7 +24,8 @@
   "Generate line-end positions from start-row to the last line."
   [lines start-row]
   (for [row (range start-row (inc (count lines)))
-        :let [line (get lines (dec row) "")]]
+        :let [line (get lines (dec row))]
+        :when (some? line)]
     {:row row :col (inc (count line))}))
 
 (defn- intra-line-positions
@@ -58,7 +59,7 @@
     (let [test-source (fixer/insert-at source offset expected)]
       (when (valid-or-different? test-source missing)
         {:pos (assoc pos :offset offset)
-         :context (str/trim (get lines (dec row) ""))}))))
+         :context (str/trim (or (get lines (dec row)) ""))}))))
 
 (defn- assign-ids
   "Assign sequential numeric IDs (1, 2, ...) to candidates."
@@ -71,18 +72,24 @@
    source: the original source string
    Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\"}]"
   [{:keys [expected opened-loc] :as missing} source]
-  (let [lines (vec (str/split source #"\n" -1))
-        start-row (:row opened-loc)
-        start-col (:col opened-loc)
-        ;; Line-end positions for all lines from start-row
-        end-positions (line-end-positions lines start-row)
-        ;; Intra-line positions for the line containing the opened delimiter
-        start-line (get lines (dec start-row) "")
-        mid-positions (intra-line-positions start-line start-row start-col)
-        ;; Combine all positions
-        positions (concat mid-positions end-positions)]
-    (->> positions
-         (keep #(try-insert-at source expected missing lines %))
-         (distinct-by #(get-in % [:pos :offset]))
-         assign-ids
-         vec)))
+  (if-not opened-loc
+    ;; If opened-loc is completely nil, return empty candidates
+    []
+    (let [start-row (:row opened-loc)
+          start-col (:col opened-loc)]
+      (if (or (nil? start-row) (nil? start-col))
+        ;; If row or col is nil (e.g., extra closing delimiter), return empty candidates
+        []
+        (let [lines (vec (str/split source #"\n" -1))
+              ;; Line-end positions for all lines from start-row
+              end-positions (line-end-positions lines start-row)
+              ;; Intra-line positions for the line containing the opened delimiter
+              start-line (or (get lines (dec start-row)) "")
+              mid-positions (intra-line-positions start-line start-row start-col)
+              ;; Combine all positions
+              positions (concat mid-positions end-positions)]
+          (->> positions
+               (keep #(try-insert-at source expected missing lines %))
+               (distinct-by #(get-in % [:pos :offset]))
+               assign-ids
+               vec))))))
