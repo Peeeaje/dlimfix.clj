@@ -284,10 +284,6 @@
               (intra-line-positions line row col expected)))
           (range start-row (inc end-row))))
 
-(def ^:private max-candidates
-  "Maximum number of candidates to return."
-  20)
-
 (defn- redundant-eof-candidate?
   "Check if this is an EOF candidate that's redundant with a line-end candidate.
    An EOF candidate (row N, col 1 on empty line) is redundant if there's already
@@ -301,6 +297,27 @@
          ;; Check if there's already a candidate at offset-1 (end of previous line)
          (let [this-offset (get-in candidate [:pos :offset])]
            (contains? offsets-seen (dec this-offset))))))
+
+(defn- candidate-priority
+  "Calculate priority score for a candidate.
+   Lower score = higher priority.
+   Candidates between opened-loc and mismatched-loc are prioritized."
+  [candidate opened-loc mismatched-loc]
+  (let [row (get-in candidate [:pos :row])
+        opened-row (or (:row opened-loc) 1)
+        mismatch-row (or (:row mismatched-loc) opened-row)]
+    (cond
+      ;; Priority flag from intra-line-positions (mismatched delimiter position)
+      (get-in candidate [:pos :priority]) 0
+      ;; Candidates between opened-loc and mismatched-loc (inclusive)
+      (and (>= row opened-row) (<= row mismatch-row))
+      (- row opened-row)  ;; Closer to opened-loc = lower score
+      ;; Candidates after mismatch-loc
+      (> row mismatch-row)
+      (+ 1000 (- row mismatch-row))
+      ;; Candidates before opened-loc
+      :else
+      (+ 2000 (- opened-row row)))))
 
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
@@ -340,11 +357,13 @@
               offsets-seen (set (map #(get-in % [:pos :offset]) raw-candidates))
               ;; Second pass: filter out redundant EOF candidates
               insert-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
-                                        raw-candidates)]
-          ;; Replacement candidate comes first if available, limit to max-candidates
+                                        raw-candidates)
+              ;; Sort candidates by priority (closer to opened-loc/mismatched-loc = higher priority)
+              sorted-candidates (sort-by #(candidate-priority % opened-loc mismatched-loc)
+                                         insert-candidates)]
+          ;; Replacement candidate comes first if available
           (->> (if replace-candidate
-                 (cons replace-candidate insert-candidates)
-                 insert-candidates)
-               (take max-candidates)
+                 (cons replace-candidate sorted-candidates)
+                 sorted-candidates)
                assign-ids
                vec))))))

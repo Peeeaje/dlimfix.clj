@@ -206,6 +206,49 @@
               (>= (count line3-cands) 1))
           "Should have candidate at line 2 end or line 3"))))
 
+(deftest missing-paren-inside-binding-vector
+  (testing "Missing ) inside let binding - should suggest insertion, not just replacement"
+    ;; (let [classname (with-meta (symbol ...) (meta cname)
+    ;;        ^-- missing ) here
+    ;;       interfaces ...]
+    ;;  ...]) <- parser reports ] as mismatched
+    ;; The correct fix is to insert ) after (meta cname), not replace ]
+    (let [source "(let [x (foo (bar y)\n        z 1]\n  x)"
+          ;; Parser reports ] at line 2 col 12 as mismatched with (
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 9}
+                   :mismatched-loc {:row 2 :col 12} :found "]"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; Should have an insert candidate at row 1 (after (bar y))
+      (let [row1-insert-cands (filter #(and (= 1 (get-in % [:pos :row]))
+                                            (= :insert (:type %))) cands)]
+        (is (>= (count row1-insert-cands) 1)
+            "Should have insert candidates in line 1 where ) is missing"))))
+
+  (testing "Missing ) in nested let binding with multiple bindings"
+    ;; (let [a (f1 x
+    ;;         b (f2 y)]  <- ] is mismatched
+    ;;   body)
+    (let [source "(let [a (f1 x\n        b (f2 y)]\n  body)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 9}
+                   :mismatched-loc {:row 2 :col 16} :found "]"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; Should suggest position at end of line 1 (col 14, after x)
+      (let [line1-cands (filter #(= 1 (get-in % [:pos :row])) cands)]
+        (is (>= (count line1-cands) 1)
+            "Should have candidates at line 1 where ) is missing"))))
+
+  (testing "Missing ) in letfn binding"
+    ;; (letfn [(helper [x]
+    ;;           (process x)]  <- should close here
+    ;;   body)   <- ] is mismatched
+    (let [source "(letfn [(helper [x]\n           (process x)]\n  body)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 9}
+                   :mismatched-loc {:row 2 :col 23} :found "]"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1)))))
+
 (deftest skip-balanced-subforms
   (testing "Should not suggest positions inside balanced subforms"
     ;; (let [x 1]
