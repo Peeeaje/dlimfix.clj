@@ -221,6 +221,33 @@
             :else
             (recur (inc col) true depth-stack positions)))))))
 
+(defn- line-balanced?
+  "Check if all delimiters opened in this line are also closed in this line."
+  [line]
+  (loop [chars (seq line)
+         depth 0]
+    (if (empty? chars)
+      (zero? depth)
+      (let [ch (first chars)]
+        (cond
+          (#{\( \[ \{} ch) (recur (rest chars) (inc depth))
+          (#{\) \] \}} ch) (recur (rest chars) (dec depth))
+          :else (recur (rest chars) depth))))))
+
+(defn- make-context
+  "Create context string for a candidate position.
+   If all delimiters on the line are balanced, show as-is (form is complete).
+   Otherwise, append '...)' to indicate the form continues and will be closed."
+  [lines row expected]
+  (let [line (or (get lines (dec row)) "")
+        trimmed (str/trim line)]
+    (cond
+      (str/blank? trimmed) ""
+      ;; If line is balanced (all opened delimiters are closed), form is complete
+      (line-balanced? trimmed) trimmed
+      ;; Otherwise, form continues beyond this line - show with closing delimiter
+      :else (str trimmed " ..." expected))))
+
 (defn- try-insert-at
   "Try inserting delimiter at position. Returns candidate or nil."
   [source expected missing lines {:keys [row col] :as pos}]
@@ -229,7 +256,7 @@
       (when (or (valid-or-different? test-source missing)
                 (before-error-loc? pos missing))
         {:pos (assoc pos :offset offset)
-         :context (str/trim (or (get lines (dec row)) ""))}))))
+         :context (make-context lines row expected)}))))
 
 (defn- assign-ids
   "Assign sequential numeric IDs (1, 2, ...) to candidates."
@@ -244,7 +271,7 @@
       (when (or (valid-or-different? test-source missing)
                 (before-error-loc? pos missing))
         {:pos {:row row :col col :offset offset}
-         :context (str/trim (or (get lines (dec row)) ""))
+         :context (make-context lines row expected)
          :type :replace}))))
 
 (defn- all-intra-line-positions
