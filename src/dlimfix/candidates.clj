@@ -14,11 +14,22 @@
                 coll)))
 
 (defn- valid-or-different?
-  "Check if inserting the delimiter resolves the original issue."
+  "Check if inserting the delimiter resolves the original issue.
+   Returns true if:
+   - The parse succeeds (ok), OR
+   - The error location changed"
   [test-source {:keys [opened-loc]}]
   (let [{:keys [ok missing]} (parser/parse-string test-source)]
     (or ok
         (and missing (not= (:opened-loc missing) opened-loc)))))
+
+(defn- before-error-loc?
+  "Check if position is before the error location."
+  [{:keys [row col]} {:keys [opened-loc]}]
+  (when opened-loc
+    (or (< row (:row opened-loc))
+        (and (= row (:row opened-loc))
+             (< col (:col opened-loc))))))
 
 (defn- line-end-positions
   "Generate line-end positions from start-row to the last line."
@@ -180,7 +191,8 @@
   [source expected missing lines {:keys [row col] :as pos}]
   (when-let [offset (fixer/row-col->offset source row col)]
     (let [test-source (fixer/insert-at source offset expected)]
-      (when (valid-or-different? test-source missing)
+      (when (or (valid-or-different? test-source missing)
+                (before-error-loc? pos missing))
         {:pos (assoc pos :offset offset)
          :context (str/trim (or (get lines (dec row)) ""))}))))
 
@@ -191,13 +203,28 @@
 
 (defn- try-replacement
   "Try replacing delimiter at mismatched position. Returns candidate or nil."
-  [source expected missing lines {:keys [row col]}]
+  [source expected missing lines {:keys [row col] :as pos}]
   (when-let [offset (fixer/row-col->offset source row col)]
     (let [test-source (fixer/replace-at source offset expected)]
-      (when (valid-or-different? test-source missing)
+      (when (or (valid-or-different? test-source missing)
+                (before-error-loc? pos missing))
         {:pos {:row row :col col :offset offset}
          :context (str/trim (or (get lines (dec row)) ""))
          :type :replace}))))
+
+(defn- all-intra-line-positions
+  "Generate intra-line positions for all lines from start-row to end-row.
+   For the first line, starts from start-col. For subsequent lines, starts from col 1."
+  [lines start-row end-row start-col expected]
+  (mapcat (fn [row]
+            (let [line (or (get lines (dec row)) "")
+                  col (if (= row start-row) start-col 1)]
+              (intra-line-positions line row col expected)))
+          (range start-row (inc end-row))))
+
+(def ^:private max-candidates
+  "Maximum number of candidates to return."
+  20)
 
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
@@ -215,14 +242,15 @@
         ;; If row or col is nil (e.g., extra closing delimiter), return empty candidates
         []
         (let [lines (vec (str/split source #"\n" -1))
+              total-lines (count lines)
               ;; Generate replacement candidate if there's a mismatched delimiter
               replace-candidate (when (and mismatched-loc found)
                                   (try-replacement source expected missing lines mismatched-loc))
-              ;; Line-end positions for all lines from start-row
-              end-positions (line-end-positions lines start-row)
-              ;; Intra-line positions for the line containing the opened delimiter
-              start-line (or (get lines (dec start-row)) "")
-              mid-positions (intra-line-positions start-line start-row start-col expected)
+              ;; Line-end positions for ALL lines (to find positions before opened-loc too)
+              end-positions (line-end-positions lines 1)
+              ;; Intra-line positions for ALL lines from line 1 to the last line
+              ;; This allows finding candidates before the reported opened-loc
+              mid-positions (all-intra-line-positions lines 1 total-lines 1 expected)
               ;; Combine all positions, prioritizing mismatched delimiters
               priority-positions (filter :priority mid-positions)
               regular-positions (remove :priority mid-positions)
@@ -231,9 +259,10 @@
                                      (keep #(try-insert-at source expected missing lines %))
                                      (distinct-by #(get-in % [:pos :offset]))
                                      (map #(assoc % :type :insert)))]
-          ;; Replacement candidate comes first if available
+          ;; Replacement candidate comes first if available, limit to max-candidates
           (->> (if replace-candidate
                  (cons replace-candidate insert-candidates)
                  insert-candidates)
+               (take max-candidates)
                assign-ids
                vec))))))

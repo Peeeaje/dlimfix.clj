@@ -91,8 +91,9 @@
       (let [first-cand (first cands)
             first-col (get-in first-cand [:pos :col])]
         (is (= 36 first-col) "First candidate should be at end of :as form"))
-      ;; Should not have candidates that split "[clojure.string :as str]"
-      (let [bad-positions (filter #(contains? #{28 32} (get-in % [:pos :col])) cands)]
+      ;; Should not have candidates on row 2 that split "[clojure.string :as str]"
+      (let [row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)
+            bad-positions (filter #(contains? #{28 32} (get-in % [:pos :col])) row2-cands)]
         (is (empty? bad-positions) "Should not generate candidates that split :as forms")))))
 
 (deftest mismatched-closer-replacement
@@ -176,3 +177,26 @@
       (is (>= (count cands) 1))
       ;; Should work normally without crashing
       (is (some? (first cands))))))
+
+(deftest unclosed-earlier-form
+  (testing "Missing ) for earlier form should suggest positions before opened-loc"
+    ;; This simulates a case where an earlier defn is not closed,
+    ;; but the parser reports the next defn's opening paren as opened-loc.
+    ;; The fixer should still find valid candidates before the opened-loc.
+    (let [source "(defn foo []\n  (+ 1 2)\n\n(defn bar []\n  (println \"hi\"))"
+          ;; Parser would report line 4 col 1 as opened-loc (the last unclosed paren)
+          ;; but the actual missing ) is for line 1's defn
+          missing {:expected ")" :opened "(" :opened-loc {:row 4 :col 1}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1) "Should generate at least one candidate")
+      ;; Should have candidates before line 4 (where the actual fix should be)
+      (let [early-cands (filter #(< (get-in % [:pos :row]) 4) cands)]
+        (is (>= (count early-cands) 1) "Should have candidates before the opened-loc line"))))
+
+  (testing "Candidates should include line 3 (after the actual form ends)"
+    (let [source "(defn foo []\n  (+ 1 2)\n\n(defn bar []\n  (println \"hi\"))"
+          missing {:expected ")" :opened "(" :opened-loc {:row 4 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          ;; Line 3 (empty line before defn bar) should be a candidate
+          line3-cands (filter #(= (get-in % [:pos :row]) 3) cands)]
+      (is (>= (count line3-cands) 1) "Should have candidate at line 3"))))
