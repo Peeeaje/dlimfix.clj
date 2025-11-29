@@ -25,10 +25,9 @@
   (testing "--fix with valid file returns no-missing message"
     (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "A1"})]
       (is (= 0 (:code result)))
-      (is (= "No missing end delimiters found." (:output result))))))
+      (is (= "No missing end delimiters found." (:output result)))))
 
-(deftest run-fix-dry-run-no-changes
-  (testing "--fix --dry-run with valid file shows no changes message"
+  (testing "--fix --dry-run with valid file also returns no-missing"
     (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "A1" :dry-run true})]
       (is (= 0 (:code result)))
       (is (= "No missing end delimiters found." (:output result))))))
