@@ -108,6 +108,27 @@
       (is (= 1 (count cands)))
       (is (= :delete (:type (first cands)))))))
 
+(deftest eof-missing-delimiter-insertion
+  (testing "EOF missing ) with nil found - should suggest insertion at EOF"
+    ;; Reader conditional case: opened-loc is nil, found is nil (EOF)
+    (let [source "#?(:clj (defn foo [] \"clj\")\n    :cljs (defn bar [] \"cljs\")"
+          missing {:expected ")" :opened "(" :opened-loc nil
+                   :mismatched-loc {:row 2 :col 31} :found nil}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1) "Should generate at least one candidate")
+      (let [cand (first cands)]
+        (is (= :insert (:type cand)) "Should be an insert candidate")
+        ;; Should insert at EOF position
+        (is (= 2 (get-in cand [:pos :row]))))))
+
+  (testing "EOF missing ) with nil found and nil mismatched-loc"
+    (let [source "(defn foo []"
+          missing {:expected ")" :opened "(" :opened-loc nil
+                   :mismatched-loc nil :found nil}
+          cands (candidates/generate-candidates missing source)]
+      ;; When both opened-loc and mismatched-loc are nil, can't generate candidates
+      (is (vector? cands)))))
+
 (deftest require-vector-missing-bracket
   (testing "Missing ] after :as alias should not split tokens"
     (let [source "(:require [clojure.set :as set]\n            [clojure.string :as str))"

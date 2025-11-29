@@ -31,15 +31,22 @@
 (defn format-list
   "Format candidate list for --list output."
   [{:keys [expected opened opened-loc mismatched-loc found]} candidates]
-  (let [extra-closer? (and (or (nil? opened-loc)
-                               (nil? (:row opened-loc)))
-                           mismatched-loc)
-        header (if extra-closer?
+  (let [has-opened-loc? (and opened-loc (:row opened-loc) (:col opened-loc))
+        extra-closer? (and (not has-opened-loc?) mismatched-loc found)
+        eof-missing? (and (not has-opened-loc?) mismatched-loc (not found) expected)
+        header (cond
+                 extra-closer?
                  (format "Extra closing delimiter '%s' at line %d, col %d"
                          found (:row mismatched-loc) (:col mismatched-loc))
+
+                 eof-missing?
+                 (format "Missing end delimiter: %s at EOF (line %d)"
+                         expected (:row mismatched-loc))
+
+                 :else
                  (format "Missing end delimiter: %s (to close '%s' at line %d, col %d)"
                          expected opened (:row opened-loc) (:col opened-loc)))
-        mismatch-hint (when (and (not extra-closer?) mismatched-loc found)
+        mismatch-hint (when (and has-opened-loc? mismatched-loc found)
                         (format "Hint: Found '%s' at line %d, col %d - consider replacing with '%s'"
                                 found (:row mismatched-loc) (:col mismatched-loc) expected))]
     (->> candidates

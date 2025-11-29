@@ -170,11 +170,20 @@
                              (:row opened-loc)
                              (:col opened-loc))]
     (cond
-      ;; Extra closing delimiter case - suggest deletion
-      (and (not has-opened-loc?) mismatched-loc)
+      ;; Extra closing delimiter case (found is actual delimiter) - suggest deletion
+      (and (not has-opened-loc?) mismatched-loc found)
       (if-let [delete-candidate (try-deletion source mismatched-loc)]
         (assign-ids [delete-candidate])
         [])
+
+      ;; EOF case: opened-loc is nil but expected delimiter exists
+      ;; Insert at mismatched-loc (EOF position)
+      (and (not has-opened-loc?) mismatched-loc expected (not found))
+      (let [{:keys [row col]} mismatched-loc]
+        (when-let [offset (fixer/row-col->offset source row col)]
+          (assign-ids [{:pos {:row row :col col :offset offset}
+                        :context (make-context lines row expected)
+                        :type :insert}])))
 
       ;; No opened-loc at all - return empty
       (not has-opened-loc?)
