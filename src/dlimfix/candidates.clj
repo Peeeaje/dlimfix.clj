@@ -279,27 +279,6 @@
          (let [this-offset (get-in candidate [:pos :offset])]
            (contains? offsets-seen (dec this-offset))))))
 
-(defn- candidate-priority
-  "Calculate priority score for a candidate.
-   Lower score = higher priority.
-   Candidates between opened-loc and mismatched-loc are prioritized."
-  [candidate opened-loc mismatched-loc]
-  (let [row (get-in candidate [:pos :row])
-        opened-row (or (:row opened-loc) 1)
-        mismatch-row (or (:row mismatched-loc) opened-row)]
-    (cond
-      ;; Priority flag from intra-line-positions (mismatched delimiter position)
-      (get-in candidate [:pos :priority]) 0
-      ;; Candidates between opened-loc and mismatched-loc (inclusive)
-      (and (>= row opened-row) (<= row mismatch-row))
-      (- row opened-row)  ;; Closer to opened-loc = lower score
-      ;; Candidates after mismatch-loc
-      (> row mismatch-row)
-      (+ 1000 (- row mismatch-row))
-      ;; Candidates before opened-loc
-      :else
-      (+ 2000 (- opened-row row)))))
-
 (defn- try-deletion
   "Try deleting the extra delimiter at mismatched position. Returns candidate.
    Always returns a candidate since deleting an extra delimiter is a valid fix."
@@ -360,9 +339,8 @@
             ;; Keep first occurrence (highest priority position on that line)
             insert-candidates (distinct-by #(vector (get-in % [:pos :row]) (:context %))
                                            non-eof-candidates)
-            ;; Sort candidates by priority (closer to opened-loc/mismatched-loc = higher priority)
-            sorted-candidates (sort-by #(candidate-priority % opened-loc mismatched-loc)
-                                       insert-candidates)]
+            ;; Sort candidates by line number ascending
+            sorted-candidates (sort-by #(get-in % [:pos :row]) insert-candidates)]
         ;; Replacement candidate comes first if available
         (->> (if replace-candidate
                (cons replace-candidate sorted-candidates)

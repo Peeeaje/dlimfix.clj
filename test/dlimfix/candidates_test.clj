@@ -114,11 +114,10 @@
           missing {:expected "]" :opened "[" :opened-loc {:row 2 :col 13}}
           cands (candidates/generate-candidates missing source)]
       (is (>= (count cands) 1))
-      ;; Only the correct position (end of line) should be suggested
-      ;; col 36 is after "str", before "))"
-      (let [first-cand (first cands)
-            first-col (get-in first-cand [:pos :col])]
-        (is (= 36 first-col) "First candidate should be at end of :as form"))
+      ;; Row 2 should have a candidate at col 36 (after "str", before "))")
+      (let [row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)
+            row2-cols (set (map #(get-in % [:pos :col]) row2-cands))]
+        (is (contains? row2-cols 36) "Should have candidate at end of :as form"))
       ;; Should not have candidates on row 2 that split "[clojure.string :as str]"
       (let [row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)
             bad-positions (filter #(contains? #{28 32} (get-in % [:pos :col])) row2-cands)]
@@ -296,6 +295,33 @@
           display-keys (map #(vector (get-in % [:pos :row]) (:context %)) cands)]
       (is (= (count display-keys) (count (distinct display-keys)))
           "Should not have duplicate display entries"))))
+
+(deftest candidates-ordered-by-line-number
+  (testing "Candidates should be ordered by line number in ascending order"
+    (let [source "(let [x 1]\n  (+ x 2)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          rows (map #(get-in % [:pos :row]) cands)]
+      (is (= rows (sort rows))
+          "Candidates should be sorted by line number ascending")))
+
+  (testing "Multi-line file should have candidates in line order"
+    (let [source "(defn foo []\n  (let [x 1]\n    (+ x 2)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          rows (map #(get-in % [:pos :row]) cands)]
+      (is (= rows (sort rows))
+          "Candidates should be sorted by line number ascending")))
+
+  (testing "Opened-loc in middle of file should still sort by line ascending"
+    ;; opened-loc at line 6, but candidates exist on lines 1-14
+    ;; Should be sorted 1, 2, 3, ... not 6, 7, 8, ..., 5, 4, 3, 2, 1
+    (let [source ";; line 1\n;; line 2\n;; line 3\n;; line 4\n;; line 5\n(let [x 1]\n  (+ x 2)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 6 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          rows (map #(get-in % [:pos :row]) cands)]
+      (is (= rows (sort rows))
+          "Candidates should be sorted by line number ascending, not by proximity to opened-loc"))))
 
 (deftest skip-balanced-subforms
   (testing "Should not suggest positions inside balanced subforms"
