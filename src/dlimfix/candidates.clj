@@ -28,10 +28,16 @@
         :when (some? line)]
     {:row row :col (inc (count line))}))
 
+(defn- matching-delimiter?
+  "Check if closing delimiter matches the expected delimiter."
+  [ch expected]
+  (= (str ch) expected))
+
 (defn- intra-line-positions
   "Generate positions within a line after token boundaries.
-   Scans from start-col to end of line, finding positions after non-whitespace."
-  [line row start-col]
+   Scans from start-col to end of line, finding positions after non-whitespace.
+   expected: the expected closing delimiter (e.g., \")\", \"]\", \"}\")"
+  [line row start-col expected]
   (let [len (count line)]
     (loop [col start-col
            in-token? false
@@ -40,14 +46,22 @@
         positions
         (let [ch (get line (dec col))
               whitespace? (Character/isWhitespace ch)
-              closing-delim? (#{\) \] \}} ch)]
+              closing-delim? (#{\) \] \}} ch)
+              mismatched-delim? (and closing-delim?
+                                     (not (matching-delimiter? ch expected)))]
           (cond
+            ;; Mismatched closing delimiter found - this is the most likely position
+            mismatched-delim?
+            (conj positions {:row row :col col :priority true})
+
             ;; End of token -> record position
             (and in-token? (or whitespace? closing-delim?))
             (recur (inc col) false (conj positions {:row row :col col}))
-            ;; Skip whitespace and closing delimiters
+
+            ;; Skip whitespace and matching closing delimiters
             (or whitespace? closing-delim?)
             (recur (inc col) false positions)
+
             ;; Inside a token
             :else
             (recur (inc col) true positions)))))))
@@ -85,9 +99,11 @@
               end-positions (line-end-positions lines start-row)
               ;; Intra-line positions for the line containing the opened delimiter
               start-line (or (get lines (dec start-row)) "")
-              mid-positions (intra-line-positions start-line start-row start-col)
-              ;; Combine all positions
-              positions (concat mid-positions end-positions)]
+              mid-positions (intra-line-positions start-line start-row start-col expected)
+              ;; Combine all positions, prioritizing mismatched delimiters
+              priority-positions (filter :priority mid-positions)
+              regular-positions (remove :priority mid-positions)
+              positions (concat priority-positions regular-positions end-positions)]
           (->> positions
                (keep #(try-insert-at source expected missing lines %))
                (distinct-by #(get-in % [:pos :offset]))

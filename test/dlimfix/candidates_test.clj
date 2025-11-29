@@ -50,7 +50,7 @@
       (is (>= (count cands) 1)))))
 
 (deftest extra-delimiter-with-nil-location
-  (testing "Extra closing paren - should not crash with NPE (Bug #1)"
+  (testing "Extra closing paren - should not crash with NPE"
     (let [source "(defn walk\n  [inner outer form]\n  (cond\n   (list? form) (outer form)))\n   (seq? form) (outer form)))"
           ;; This is what edamame returns for extra closing delimiter
           missing {:expected "" :opened "" :opened-loc {:row nil :col nil}}
@@ -79,3 +79,56 @@
           cands (candidates/generate-candidates missing source)]
       (is (vector? cands))
       (is (= 0 (count cands))))))
+
+(deftest mismatched-delimiter-priority
+  (testing "Mismatched ] instead of ) - position before ] should be first"
+    (let [source "result (+ x y z]"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 8}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be right before the mismatched ]
+      (let [first-cand (first cands)
+            first-col (get-in first-cand [:pos :col])]
+        ;; Position should be col 16 (before ]), not col 10 (after +)
+        (is (= 16 first-col) "First candidate should be before the mismatched ]"))))
+
+  (testing "Mismatched } instead of ) in vector call"
+    (let [source "(vector a b})"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be right before the mismatched }
+      (let [first-cand (first cands)
+            first-col (get-in first-cand [:pos :col])]
+        (is (= 12 first-col) "First candidate should be before the mismatched }"))))
+
+  (testing "Mismatched ] instead of } in set literal"
+    (let [source "(let [result #{:a :b :c :d :e]"
+          missing {:expected "}" :opened "{" :opened-loc {:row 1 :col 17}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be right before the mismatched ]
+      ;; source = "(let [result #{:a :b :c :d :e]"
+      ;;           123456789012345678901234567890
+      ;; ] is at position 30, so col 30 is before ]
+      (let [first-cand (first cands)
+            first-col (get-in first-cand [:pos :col])]
+        (is (= 30 first-col) "First candidate should be before the mismatched ]"))))
+
+  (testing "Mismatched ) instead of } in map"
+    (let [source "(when same {k ab)"
+          missing {:expected "}" :opened "{" :opened-loc {:row 1 :col 12}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be right before the mismatched )
+      (let [first-cand (first cands)
+            first-col (get-in first-cand [:pos :col])]
+        (is (= 17 first-col) "First candidate should be before the mismatched )"))))
+
+  (testing "No mismatched delimiter - regular priority"
+    (let [source "(+ 1 2"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; Should work normally without crashing
+      (is (some? (first cands))))))
