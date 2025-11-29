@@ -21,15 +21,42 @@
       (is (str/includes? result "2)"))
       (is (str/includes? result "[EOF]")))))
 
-(deftest format-list-column-numbers-test
-  (testing "Column numbers should be 1-indexed"
+(deftest format-list-line-numbers-test
+  (testing "Line numbers are shown for insert candidates"
     (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 5}}
-          candidates [{:id "1" :pos {:row 2 :col 10} :context "(+ x y)"}
-                      {:id "2" :pos {:row 3 :col 1} :context ""}]
+          candidates [{:id "1" :pos {:row 2 :col 10} :context "(+ x y)" :type :insert}
+                      {:id "2" :pos {:row 3 :col 1} :context "" :type :insert}]
           result (output/format-list missing candidates)]
-      ;; Column numbers should appear as-is (1-indexed), not decremented
-      (is (str/includes? result "col 10") "Candidate 1 should show col 10")
-      (is (str/includes? result "col 1") "Candidate 2 should show col 1, not col 0"))))
+      (is (str/includes? result "line 2") "Candidate 1 should show line 2")
+      (is (str/includes? result "line 3") "Candidate 2 should show line 3"))))
+
+(deftest format-candidate-with-insertion-marker-test
+  (testing "Shows | marker at insertion position without delimiter"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          candidates [{:id "1" :pos {:row 1 :col 11} :context "(let [x 1]" :type :insert}]
+          result (output/format-list missing candidates)]
+      (is (str/includes? result "(let [x 1]|") "Should show | at insertion point")
+      (is (not (str/includes? result "|)")) "Should not show delimiter after |")))
+
+  (testing "Shows 'insert at line X' for insert candidates"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          candidates [{:id "1" :pos {:row 2 :col 9} :context "(+ x 2)" :type :insert}]
+          result (output/format-list missing candidates)]
+      (is (str/includes? result "insert at line 2") "Should show 'insert at line'")))
+
+  (testing "Shows [EOF] when context is empty"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          candidates [{:id "1" :pos {:row 3 :col 1} :context "" :type :insert}]
+          result (output/format-list missing candidates)]
+      (is (str/includes? result "[EOF]|") "Should show [EOF]| for empty context")))
+
+  (testing "Replace type shows 'replace' without | marker"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}
+                   :mismatched-loc {:row 2 :col 5} :found "]"}
+          candidates [{:id "1" :pos {:row 2 :col 5} :context "(+ x]" :type :replace}]
+          result (output/format-list missing candidates)]
+      (is (str/includes? result "replace") "Should show 'replace' for replace type")
+      (is (not (str/includes? result "|")) "Should not show | marker for replace"))))
 
 (deftest format-diff-test
   (testing "Returns nil when no changes"

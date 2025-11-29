@@ -7,16 +7,26 @@
   []
   "No missing end delimiters found.")
 
+(defn- format-insert-context
+  "Format context for insert type with | marker showing insertion point.
+   Only shows | without the delimiter (delimiter is already in header)."
+  [context]
+  (let [display (if (str/blank? context)
+                  "[EOF]"
+                  context)]
+    (str display "|")))
+
 (defn- format-candidate
   "Format a single candidate line."
   [{:keys [id pos context type]}]
-  (let [action (case type
-                 :replace "replace at"
-                 :delete "delete at"
-                 "after")]
-    (format "  %s) %s line %d, col %d: %s"
-            id action (:row pos) (:col pos)
-            (if (str/blank? context) "[EOF]" context))))
+  (case type
+    :replace (format "  %s) replace at line %d, col %d: %s"
+                     id (:row pos) (:col pos) context)
+    :delete (format "  %s) delete at line %d, col %d: %s"
+                    id (:row pos) (:col pos) context)
+    ;; Default: insert type - show with | marker
+    (format "  %s) insert at line %d: %s"
+            id (:row pos) (format-insert-context context))))
 
 (defn format-list
   "Format candidate list for --list output."
