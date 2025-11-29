@@ -44,134 +44,25 @@
   [ch expected]
   (= (str ch) expected))
 
-(defn- peek-next-token
-  "Peek at the next non-whitespace token starting from col.
-   Returns the token string or nil if no token found."
-  [line col]
-  (let [len (count line)
-        ;; Skip whitespace
-        start (loop [c col]
-                (if (or (>= c len) (not (Character/isWhitespace (get line c))))
-                  c
-                  (recur (inc c))))]
-    (when (< start len)
-      ;; Collect token characters
-      (let [end (loop [c start]
-                  (if (or (>= c len)
-                          (let [ch (get line c)]
-                            (or (Character/isWhitespace ch) (#{\( \) \[ \] \{ \}} ch))))
-                    c
-                    (recur (inc c))))]
-        (when (> end start)
-          (subs line start end))))))
-
-(defn- skip-balanced-form
-  "Skip past a balanced form (vector, list, map, or set) starting at col.
-   Returns the column after the closing delimiter, or col if not a form."
-  [line col]
-  (let [len (count line)]
-    (when (< col len)
-      (let [ch (get line col)]
-        (when (#{\[ \( \{} ch)
-          (let [opener ch
-                closer (case opener \[ \] \( \) \{ \})]
-            (loop [c (inc col)
-                   depth 1]
-              (if (or (>= c len) (zero? depth))
-                c
-                (let [curr (get line c)]
-                  (cond
-                    (= curr opener) (recur (inc c) (inc depth))
-                    (= curr closer) (recur (inc c) (dec depth))
-                    :else (recur (inc c) depth)))))))))))
-
-(defn- should-skip-position?
-  "Check if we should skip this position because:
-   1. The previous token was a special keyword (:as, :refer, etc.) OR
-   2. The next token is a special keyword
-   Returns {:skip true :to col} if should skip, nil otherwise."
-  [line col]
-  (let [len (count line)
-        before (subs line 0 (dec col))
-        ;; Check if previous token was special keyword
-        prev-special? (re-find #"(?::as|:refer|:refer-macros|:refer-clojure|:rename|:include-macros)\s*$" before)
-        ;; Check if next token is special keyword
-        next-token (peek-next-token line col)
-        next-special? (and next-token (re-matches #":(?:as|refer|refer-macros|refer-clojure|rename|include-macros)" next-token))]
-    (cond
-      ;; Previous token was special - skip the current position and the next token/form
-      prev-special?
-      (let [;; Skip whitespace
-            start (loop [c col]
-                    (if (or (>= c len) (not (Character/isWhitespace (get line c))))
-                      c
-                      (recur (inc c))))
-            ;; Check if next is a balanced form (for :refer [..])
-            skip-to (if-let [after-form (skip-balanced-form line start)]
-                      after-form
-                      ;; Otherwise skip the next token
-                      (loop [c start]
-                        (if (>= c len)
-                          (inc len)
-                          (let [ch (get line c)]
-                            (if (or (Character/isWhitespace ch) (#{\) \] \}} ch))
-                              c
-                              (recur (inc c)))))))]
-        {:skip true :to skip-to})
-
-      ;; Next token is special - skip current position and the keyword and its following token/form
-      next-special?
-      (let [;; Skip past the special keyword
-            after-kw (loop [c col]
-                       (if (>= c len)
-                         (inc len)
-                         (let [ch (get line c)]
-                           (if (Character/isWhitespace ch)
-                             c
-                             (recur (inc c))))))
-            ;; Skip whitespace after keyword
-            after-ws (loop [c (inc after-kw)]
-                       (if (or (>= c len) (not (Character/isWhitespace (get line c))))
-                         c
-                         (recur (inc c))))
-            ;; Skip past the next token/form after the keyword
-            skip-to (if-let [after-form (skip-balanced-form line after-ws)]
-                      after-form
-                      (loop [c after-ws]
-                        (if (>= c len)
-                          (inc len)
-                          (let [ch (get line c)]
-                            (if (or (Character/isWhitespace ch) (#{\) \] \}} ch))
-                              c
-                              (recur (inc c)))))))]
-        {:skip true :to skip-to})
-
-      :else
-      nil)))
-
 (defn- intra-line-positions
-  "Generate positions within a line after token boundaries.
-   Scans from start-col to end of line, finding positions after non-whitespace.
-   Skips over balanced subforms (parentheses, brackets, braces).
+  "Generate positions within a line after balanced subforms.
+   Only generates positions after closing delimiters that exit to top level.
+   Also detects mismatched closing delimiters as priority positions.
    expected: the expected closing delimiter (e.g., \")\", \"]\", \"}\")"
   [line row start-col expected]
   (let [len (count line)]
     (loop [col start-col
-           in-token? false
            depth-stack []  ;; Stack of opening delimiters to track nesting
            positions []]
       (if (> col len)
         positions
         (let [ch (get line (dec col))
-              whitespace? (Character/isWhitespace ch)
               opening-delim? (#{\( \[ \{} ch)
               closing-delim? (#{\) \] \}} ch)
               expected-closer (case (peek depth-stack)
                                 \( \) \[ \] \{ \} nil)
               inside-subform? (seq depth-stack)
               ;; Mark as mismatched if closing delimiter doesn't match what we expect
-              ;; At top level: doesn't match expected (what we're looking for)
-              ;; Inside subform: doesn't match expected-closer (what would close the subform)
               mismatched-at-top? (and closing-delim?
                                       (not inside-subform?)
                                       (not (matching-delimiter? ch expected)))
@@ -181,45 +72,24 @@
           (cond
             ;; Opening delimiter found - push to stack
             opening-delim?
-            (recur (inc col) false (conj depth-stack ch) positions)
+            (recur (inc col) (conj depth-stack ch) positions)
 
-            ;; Closing delimiter that matches current subform - pop stack and record position
+            ;; Closing delimiter that matches current subform - pop stack
             (and closing-delim? inside-subform? (= ch expected-closer))
             (let [new-stack (pop depth-stack)]
               (if (empty? new-stack)
                 ;; Exited to top level - record position after this closer
-                (recur (inc col) false new-stack (conj positions {:row row :col (inc col)}))
+                (recur (inc col) new-stack (conj positions {:row row :col (inc col)}))
                 ;; Still inside a subform - just continue
-                (recur (inc col) false new-stack positions)))
+                (recur (inc col) new-stack positions)))
 
-            ;; Mismatched closing delimiter inside subform - this is a likely error position
-            ;; Record position before it and stop (like mismatched at top level)
-            mismatched-in-subform?
+            ;; Mismatched closing delimiter - this is a likely error position
+            (or mismatched-in-subform? mismatched-at-top?)
             (conj positions {:row row :col col :priority true})
 
-            ;; Mismatched closing delimiter at top level - this is the most likely position
-            mismatched-at-top?
-            (conj positions {:row row :col col :priority true})
-
-            ;; Inside a subform - skip everything until it closes
-            inside-subform?
-            (recur (inc col) in-token? depth-stack positions)
-
-            ;; End of token at top level -> check if we should skip
-            (and in-token? (or whitespace? closing-delim?))
-            (if-let [skip-info (should-skip-position? line col)]
-              ;; Skip the token after special keywords like :as
-              (recur (:to skip-info) false depth-stack positions)
-              ;; Normal case - record position
-              (recur (inc col) false depth-stack (conj positions {:row row :col col})))
-
-            ;; Skip whitespace and matching closing delimiters at top level
-            (or whitespace? closing-delim?)
-            (recur (inc col) false depth-stack positions)
-
-            ;; Inside a token at top level
+            ;; Everything else - just continue scanning
             :else
-            (recur (inc col) true depth-stack positions)))))))
+            (recur (inc col) depth-stack positions)))))))
 
 (defn- make-context
   "Create context string for a candidate position.

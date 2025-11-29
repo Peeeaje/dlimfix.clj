@@ -297,6 +297,29 @@
       (is (= rows (sort rows))
           "Candidates should be sorted by line number ascending"))))
 
+(deftest candidates-only-at-valid-positions
+  (testing "Should not generate candidates after keywords mid-line"
+    ;; :else is a keyword, inserting ) after it makes no sense
+    (let [source "(cond\n  :else (foo bar))"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          ;; Valid positions: after (foo bar)) on line 2, or end of line 1
+          ;; Invalid: after :else (col 8 on line 2)
+          row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)
+          row2-cols (set (map #(get-in % [:pos :col]) row2-cands))]
+      ;; col 8 is right after ":else " - should not be a candidate
+      (is (not (contains? row2-cols 8))
+          "Should not suggest insertion after :else keyword")))
+
+  (testing "Should generate candidates at line end"
+    (let [source "(cond\n  :else (foo bar))"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          ;; Line 2 ends at col 18 (after the last ))
+          row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)]
+      (is (>= (count row2-cands) 1)
+          "Should have at least one candidate on line 2"))))
+
 (deftest no-candidates-before-opened-loc
   (testing "Should not generate candidates before opened-loc line"
     ;; opened-loc at line 6, candidates on lines 1-5 are invalid
