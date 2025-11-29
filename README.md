@@ -49,10 +49,11 @@ Output:
 ```
 Missing end delimiter: ) (to close '(' at line 1, col 1)
 Candidates:
-  1) after line 1, col 12: (defn foo []
-  2) after line 2, col 9: (+ 1 2)
-  3) after line 3, col 0: [EOF]
+  1) insert at line 1: (defn foo []|
+  2) insert at line 2: (+ 1 2)|
 ```
+
+The `|` marker shows where the delimiter will be inserted.
 
 ### Fix with specific position
 
@@ -84,8 +85,8 @@ clj -M:run --fix file.clj -p 2 --out fixed.clj
 
 ## Exit Codes
 
-- `0`: Success
-- `1`: Argument error (missing file, unknown ID, etc.)
+- `0`: Success (no missing delimiters, or fix applied successfully)
+- `1`: Missing delimiter found, or argument error (missing file, unknown ID, etc.)
 - `2`: Parse error (fatal syntax error)
 
 ## Development
