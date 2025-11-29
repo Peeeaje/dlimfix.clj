@@ -11,7 +11,7 @@
   "Format a single candidate line."
   [{:keys [id pos context]}]
   (format "  %s) after line %d, col %d: %s"
-          id (:row pos) (dec (:col pos))
+          id (:row pos) (:col pos)
           (if (str/blank? context) "[EOF]" context)))
 
 (defn format-list

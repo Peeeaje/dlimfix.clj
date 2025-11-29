@@ -21,6 +21,16 @@
       (is (str/includes? result "2)"))
       (is (str/includes? result "[EOF]")))))
 
+(deftest format-list-column-numbers-test
+  (testing "Column numbers should be 1-indexed"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 5}}
+          candidates [{:id "1" :pos {:row 2 :col 10} :context "(+ x y)"}
+                      {:id "2" :pos {:row 3 :col 1} :context ""}]
+          result (output/format-list missing candidates)]
+      ;; Column numbers should appear as-is (1-indexed), not decremented
+      (is (str/includes? result "col 10") "Candidate 1 should show col 10")
+      (is (str/includes? result "col 1") "Candidate 2 should show col 1, not col 0"))))
+
 (deftest format-diff-test
   (testing "Returns nil when no changes"
     (is (nil? (output/format-diff "abc" "abc" "test.clj"))))
