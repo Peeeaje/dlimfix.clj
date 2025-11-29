@@ -19,6 +19,24 @@ git clone https://github.com/yourname/dlimfix.clj
 cd dlimfix.clj
 ```
 
+### bbin (Babashka) install
+
+`bbin` が入っていれば、リポジトリから直接インストールできます。
+
+```bash
+# GitHub 上のリポジトリから
+bbin install git+https://github.com/yourname/dlimfix.clj
+
+# またはローカルクローンから
+bbin install .
+```
+
+インストール後は `dlimfix` コマンドとして使えます:
+
+```bash
+dlimfix --list file.clj
+```
+
 ## Usage
 
 ### List candidates
