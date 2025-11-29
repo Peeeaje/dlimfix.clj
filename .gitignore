@@ -3,3 +3,5 @@
 .nrepl-port
 *.jar
 target/
+.lsp/.cache/
+.clj-kondo/.cache/
