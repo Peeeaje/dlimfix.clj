@@ -9,16 +9,25 @@
   (when-let [[_ found] (re-find #"Unmatched delimiter: (.)" message)]
     found))
 
+(defn- auto-resolve-fn
+  "Auto-resolve function for namespace-qualified keywords.
+   Accepts any alias and returns a symbol for it, allowing the parser
+   to handle ::alias/keyword syntax without knowing the actual aliases."
+  [alias]
+  (if (= :current alias)
+    'user
+    (symbol (str alias))))
+
 (def ^:private parse-opts
   "Options for edamame parser.
    - :all true - parse all forms
    - :end-location true - include end location metadata
-   - :auto-resolve - resolve :: keywords
+   - :auto-resolve - function to resolve :: keywords (accepts any alias)
    - :read-cond :allow - allow reader conditionals (#? and #?@)
    - :features #{:clj :cljs} - supported reader conditional features"
   {:all true
    :end-location true
-   :auto-resolve '{:current user}
+   :auto-resolve auto-resolve-fn
    :read-cond :allow
    :features #{:clj :cljs}})
 

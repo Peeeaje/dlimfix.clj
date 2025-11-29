@@ -98,7 +98,7 @@
       (is (= "}" (get-in result [:missing :found]))))))
 
 (deftest parse-reader-conditional
-  (testing "BUG-006: Reader conditional #? should be allowed"
+  (testing "Reader conditional #? should be allowed"
     (let [result (parser/parse-string "#?(:clj (println \"clj\") :cljs (println \"cljs\"))")]
       (is (:ok result))))
 
@@ -109,4 +109,22 @@
 
   (testing "Reader conditional splicing #?@ should be allowed"
     (let [result (parser/parse-string "[1 #?@(:clj [2 3] :cljs [4 5]) 6]")]
+      (is (:ok result)))))
+
+(deftest parse-aliased-keyword
+  (testing "Aliased keyword ::alias/name should be allowed"
+    (let [result (parser/parse-string "::set/value")]
+      (is (:ok result))))
+
+  (testing "Aliased keyword with missing paren is detected"
+    (let [result (parser/parse-string "(def data ::set/value")]
+      (is (:missing result))
+      (is (= ")" (get-in result [:missing :expected])))))
+
+  (testing "Multiple aliased keywords should work"
+    (let [result (parser/parse-string "{::str/foo 1 ::set/bar 2}")]
+      (is (:ok result))))
+
+  (testing "Current namespace keyword :: should still work"
+    (let [result (parser/parse-string "::my-keyword")]
       (is (:ok result)))))

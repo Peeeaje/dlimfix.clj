@@ -81,7 +81,7 @@
       (is (= 0 (count cands))))))
 
 (deftest require-vector-missing-bracket
-  (testing "BUG-002: Missing ] after :as alias should not split tokens"
+  (testing "Missing ] after :as alias should not split tokens"
     (let [source "(:require [clojure.set :as set]\n            [clojure.string :as str))"
           missing {:expected "]" :opened "[" :opened-loc {:row 2 :col 13}}
           cands (candidates/generate-candidates missing source)]
@@ -96,7 +96,7 @@
         (is (empty? bad-positions) "Should not generate candidates that split :as forms")))))
 
 (deftest mismatched-closer-replacement
-  (testing "BUG-004: Wrong closer type should generate replacement candidate first"
+  (testing "Wrong closer type should generate replacement candidate first"
     (let [source "(+ acc item]"
           missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}
                    :mismatched-loc {:row 1 :col 12} :found "]"}
