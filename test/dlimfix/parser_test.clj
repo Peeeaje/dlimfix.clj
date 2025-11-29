@@ -128,3 +128,30 @@
   (testing "Current namespace keyword :: should still work"
     (let [result (parser/parse-string "::my-keyword")]
       (is (:ok result)))))
+
+(deftest parse-custom-tag-literal
+  (testing "Custom tag literal #myapp/Foo should be allowed"
+    (let [result (parser/parse-string "#myapp/Foo {:a 1}")]
+      (is (:ok result))))
+
+  (testing "Custom tag with missing brace is detected"
+    (let [result (parser/parse-string "#myapp/Foo {:a 1")]
+      (is (:missing result))
+      (is (= "}" (get-in result [:missing :expected])))))
+
+  (testing "#js tag literal should be allowed"
+    (let [result (parser/parse-string "#js {:foo 1 :bar 2}")]
+      (is (:ok result))))
+
+  (testing "#js with missing brace is detected"
+    (let [result (parser/parse-string "#js {:foo 1")]
+      (is (:missing result))
+      (is (= "}" (get-in result [:missing :expected])))))
+
+  (testing "#inst tag should be allowed"
+    (let [result (parser/parse-string "#inst \"2024-01-01\"")]
+      (is (:ok result))))
+
+  (testing "#uuid tag should be allowed"
+    (let [result (parser/parse-string "#uuid \"550e8400-e29b-41d4-a716-446655440000\"")]
+      (is (:ok result)))))

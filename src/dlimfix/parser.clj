@@ -24,12 +24,14 @@
    - :end-location true - include end location metadata
    - :auto-resolve - function to resolve :: keywords (accepts any alias)
    - :read-cond :allow - allow reader conditionals (#? and #?@)
-   - :features #{:clj :cljs} - supported reader conditional features"
+   - :features #{:clj :cljs} - supported reader conditional features
+   - :readers - function to handle any tagged literal (returns identity)"
   {:all true
    :end-location true
    :auto-resolve auto-resolve-fn
    :read-cond :allow
-   :features #{:clj :cljs}})
+   :features #{:clj :cljs}
+   :readers (fn [_tag] identity)})
 
 (defn parse-string
   "Parse a Clojure source string.
