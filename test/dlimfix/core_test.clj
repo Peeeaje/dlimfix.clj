@@ -43,3 +43,14 @@
     (let [result (core/run {:file "test-resources/valid.clj"})]
       (is (= 1 (:code result)))
       (is (= "Specify --list or --fix" (:output result))))))
+
+(deftest run-fix-with-numeric-position
+  (testing "--fix with numeric position parsed as integer (before CLI coercion)"
+    (let [result (core/run {:fix true :file "test-resources/single-missing.txt" :position 1 :dry-run true})]
+      (is (= 1 (:code result)) "Should fail with numeric position ID without coercion")
+      (is (str/includes? (:output result) "Unknown position ID"))))
+
+  (testing "--fix with string position (after CLI coercion)"
+    (let [result (core/run {:fix true :file "test-resources/single-missing.txt" :position "1" :dry-run true})]
+      (is (= 0 (:code result)) "Should successfully fix with string position ID")
+      (is (str/includes? (:output result) "(defn foo []") "Should show diff with context"))))

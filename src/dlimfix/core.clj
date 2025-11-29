@@ -14,7 +14,8 @@
           :fix {:desc "Apply fix at specified position"
                 :coerce :boolean}
           :position {:desc "Position ID to fix (e.g., 1)"
-                     :alias :p}
+                     :alias :p
+                     :coerce :string}
           :dry-run {:desc "Show diff without modifying file"
                     :coerce :boolean}
           :out {:desc "Output file path (instead of overwriting)"}
