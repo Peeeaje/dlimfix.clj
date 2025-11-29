@@ -59,3 +59,11 @@
   (if-let [modified (replace-delimiter source row col new-delimiter)]
     {:ok modified}
     {:error (format "Invalid position: line %d, col %d" row col)}))
+
+(defn apply-deletion
+  "Apply a deletion fix (delete a single character at row/col).
+   Returns {:ok modified-source} or {:error message}"
+  [source row col]
+  (if-let [offset (row-col->offset source row col)]
+    {:ok (delete-at source offset)}
+    {:error (format "Invalid position: line %d, col %d" row col)}))

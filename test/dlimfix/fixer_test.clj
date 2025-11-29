@@ -50,3 +50,12 @@
       (is (= {:ok "(+ 1) 2"} (fixer/apply-fix "(+ 1 2" candidates "1" ")")))
       (is (= {:ok "(+ 1 2)"} (fixer/apply-fix "(+ 1 2" candidates "2" ")")))
       (is (= {:error "Unknown position ID: 3"} (fixer/apply-fix "(+ 1 2" candidates "3" ")"))))))
+
+(deftest apply-deletion-test
+  (testing "Apply deletion by row/col"
+    (is (= {:ok "(ns foo)"} (fixer/apply-deletion "(ns foo))" 1 9)))
+    (is (= {:ok "(ns foo)\n(defn bar [])"}
+           (fixer/apply-deletion "(ns foo))\n(defn bar [])" 1 9))))
+  (testing "Invalid position returns error"
+    (is (= {:error "Invalid position: line 0, col 1"}
+           (fixer/apply-deletion "abc" 0 1)))))

@@ -98,13 +98,17 @@
           cands (candidates/generate-candidates missing source)
           candidate (first (filter #(= (:id %) position) cands))
           fix-result (if candidate
-                       (if (= (:type candidate) :replace)
-                         ;; Replace the mismatched delimiter
+                       (case (:type candidate)
+                         :replace
                          (fixer/apply-replacement source
                                                   (get-in candidate [:pos :row])
                                                   (get-in candidate [:pos :col])
                                                   expected)
-                         ;; Insert the delimiter
+                         :delete
+                         (fixer/apply-deletion source
+                                               (get-in candidate [:pos :row])
+                                               (get-in candidate [:pos :col]))
+                         ;; Default: insert the delimiter
                          (fixer/apply-fix source cands position expected))
                        {:error (str "Unknown position ID: " position)})]
       (if (:error fix-result)

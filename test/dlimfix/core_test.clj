@@ -95,3 +95,16 @@
         (is (str/includes? (:output result) "---") "Should show diff")
         (is (not (str/includes? (:output result) "Remaining")) "Should not show remaining errors in dry-run")
         (is (= 0 (:code result)) "Should return zero for dry-run")))))
+
+(deftest run-fix-delete-candidate
+  (testing "--fix should apply :delete candidate to remove extra delimiter"
+    (let [test-file "/tmp/delete-test.clj"
+          content "(ns foo))\n(defn bar [])"]
+      (spit test-file content)
+      ;; First check that --list shows delete candidate
+      (let [list-result (core/run {:file test-file})]
+        (is (str/includes? (:output list-result) "delete") "Should show delete candidate"))
+      ;; Then fix with dry-run
+      (let [result (core/run {:fix true :file test-file :position "1" :dry-run true})]
+        (is (str/includes? (:output result) "---") "Should show diff")
+        (is (str/includes? (:output result) "(ns foo)") "Should show fixed content")))))
