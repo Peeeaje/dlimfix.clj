@@ -313,14 +313,15 @@
       ;; Normal case - missing delimiter
       :else
       (let [total-lines (count lines)
+            opened-row (:row opened-loc)
+            opened-col (:col opened-loc)
             ;; Generate replacement candidate if there's a mismatched delimiter
             replace-candidate (when (and mismatched-loc found)
                                 (try-replacement source expected missing lines mismatched-loc))
-            ;; Line-end positions for ALL lines (to find positions before opened-loc too)
-            end-positions (line-end-positions lines 1)
-            ;; Intra-line positions for ALL lines from line 1 to the last line
-            ;; This allows finding candidates before the reported opened-loc
-            mid-positions (all-intra-line-positions lines 1 total-lines 1 expected)
+            ;; Line-end positions starting from opened-loc line
+            end-positions (line-end-positions lines opened-row)
+            ;; Intra-line positions starting from opened-loc
+            mid-positions (all-intra-line-positions lines opened-row total-lines opened-col expected)
             ;; Combine all positions, prioritizing mismatched delimiters
             priority-positions (filter :priority mid-positions)
             regular-positions (remove :priority mid-positions)

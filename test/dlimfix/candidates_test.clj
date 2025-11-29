@@ -205,33 +205,17 @@
       ;; Should work normally without crashing
       (is (some? (first cands))))))
 
-(deftest unclosed-earlier-form
-  (testing "Missing ) for earlier form should suggest positions before opened-loc"
-    ;; This simulates a case where an earlier defn is not closed,
-    ;; but the parser reports the next defn's opening paren as opened-loc.
-    ;; The fixer should still find valid candidates before the opened-loc.
+(deftest unclosed-form-candidates
+  (testing "Candidates should only be at or after opened-loc"
+    ;; Parser reports opened-loc, and we only generate candidates from that position
     (let [source "(defn foo []\n  (+ 1 2)\n\n(defn bar []\n  (println \"hi\"))"
-          ;; Parser would report line 4 col 1 as opened-loc (the last unclosed paren)
-          ;; but the actual missing ) is for line 1's defn
           missing {:expected ")" :opened "(" :opened-loc {:row 4 :col 1}}
           cands (candidates/generate-candidates missing source)]
       (is (>= (count cands) 1) "Should generate at least one candidate")
-      ;; Should have candidates before line 4 (where the actual fix should be)
-      (let [early-cands (filter #(< (get-in % [:pos :row]) 4) cands)]
-        (is (>= (count early-cands) 1) "Should have candidates before the opened-loc line"))))
-
-  (testing "Candidates should include position after first defn ends"
-    (let [source "(defn foo []\n  (+ 1 2)\n\n(defn bar []\n  (println \"hi\"))"
-          missing {:expected ")" :opened "(" :opened-loc {:row 4 :col 1}}
-          cands (candidates/generate-candidates missing source)
-          ;; Line 2 end (after (+ 1 2)) or line 3 (empty line) should be a candidate
-          ;; With redundant EOF filtering, line 3 col 1 may be excluded if line 2 end exists
-          line2-end-cands (filter #(and (= (get-in % [:pos :row]) 2)
-                                        (= (get-in % [:pos :col]) 10)) cands)
-          line3-cands (filter #(= (get-in % [:pos :row]) 3) cands)]
-      (is (or (>= (count line2-end-cands) 1)
-              (>= (count line3-cands) 1))
-          "Should have candidate at line 2 end or line 3"))))
+      ;; All candidates should be at or after opened-loc (line 4)
+      (let [valid-cands (filter #(>= (get-in % [:pos :row]) 4) cands)]
+        (is (= (count cands) (count valid-cands))
+            "All candidates should be at or after opened-loc")))))
 
 (deftest missing-paren-inside-binding-vector
   (testing "Missing ) inside let binding - should suggest insertion, not just replacement"
@@ -311,17 +295,26 @@
           cands (candidates/generate-candidates missing source)
           rows (map #(get-in % [:pos :row]) cands)]
       (is (= rows (sort rows))
-          "Candidates should be sorted by line number ascending")))
+          "Candidates should be sorted by line number ascending"))))
 
-  (testing "Opened-loc in middle of file should still sort by line ascending"
-    ;; opened-loc at line 6, but candidates exist on lines 1-14
-    ;; Should be sorted 1, 2, 3, ... not 6, 7, 8, ..., 5, 4, 3, 2, 1
+(deftest no-candidates-before-opened-loc
+  (testing "Should not generate candidates before opened-loc line"
+    ;; opened-loc at line 6, candidates on lines 1-5 are invalid
     (let [source ";; line 1\n;; line 2\n;; line 3\n;; line 4\n;; line 5\n(let [x 1]\n  (+ x 2)"
           missing {:expected ")" :opened "(" :opened-loc {:row 6 :col 1}}
           cands (candidates/generate-candidates missing source)
           rows (map #(get-in % [:pos :row]) cands)]
-      (is (= rows (sort rows))
-          "Candidates should be sorted by line number ascending, not by proximity to opened-loc"))))
+      (is (every? #(>= % 6) rows)
+          "All candidates should be at or after opened-loc line")))
+
+  (testing "Should not generate candidates before opened-loc column on same line"
+    ;; opened-loc at col 5, candidates before col 5 on same line are invalid
+    (let [source "foo (bar baz"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 5}}
+          cands (candidates/generate-candidates missing source)
+          cols (map #(get-in % [:pos :col]) cands)]
+      (is (every? #(> % 5) cols)
+          "All candidates should be after opened-loc column"))))
 
 (deftest skip-balanced-subforms
   (testing "Should not suggest positions inside balanced subforms"
