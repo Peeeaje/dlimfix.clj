@@ -59,13 +59,16 @@
 
 (defn- write-output
   "Write modified content to file or stdout.
-   After writing (not dry-run), re-parses to check for remaining errors."
+   Re-parses to check for remaining errors (including in dry-run mode)."
   [{:keys [source file-path modified dry-run out-path]}]
   (let [diff (output/format-diff source modified file-path)]
     (cond
       dry-run
-      {:output (or diff "No changes needed.")
-       :code 0}
+      (let [{:keys [remaining-output has-errors]} (check-remaining-errors modified)
+            output-parts (cond-> [(or diff "No changes needed.")]
+                           remaining-output (conj remaining-output))]
+        {:output (apply str (interpose "\n" output-parts))
+         :code (if has-errors 1 0)})
 
       out-path
       (do (spit out-path modified :encoding "UTF-8")

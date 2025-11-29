@@ -87,14 +87,23 @@
         (is (not (str/includes? (:output result) "Remaining")) "Should not show remaining errors")
         (is (= 0 (:code result)) "Should return zero when fix is complete"))))
 
-  (testing "--fix --dry-run should not show remaining errors"
+  (testing "--fix --dry-run should show remaining errors and return non-zero"
     (let [test-file "/tmp/dry-run-test.clj"
           content "(defn foo []\n  (+ 1 2\n\n(defn bar []\n  (println \"hi\")"]
       (spit test-file content)
       (let [result (core/run {:fix true :file test-file :position "1" :dry-run true})]
         (is (str/includes? (:output result) "---") "Should show diff")
-        (is (not (str/includes? (:output result) "Remaining")) "Should not show remaining errors in dry-run")
-        (is (= 0 (:code result)) "Should return zero for dry-run")))))
+        (is (str/includes? (:output result) "Remaining") "Should show remaining errors in dry-run")
+        (is (= 1 (:code result)) "Should return non-zero when errors remain"))))
+
+  (testing "--fix --dry-run with no remaining errors should return zero"
+    (let [test-file "/tmp/dry-run-single-error.clj"
+          content "(defn foo []\n  (+ 1 2)"]
+      (spit test-file content)
+      (let [result (core/run {:fix true :file test-file :position "1" :dry-run true})]
+        (is (str/includes? (:output result) "---") "Should show diff")
+        (is (not (str/includes? (:output result) "Remaining")) "Should not show remaining errors")
+        (is (= 0 (:code result)) "Should return zero when fix is complete")))))
 
 (deftest run-fix-delete-candidate
   (testing "--fix should apply :delete candidate to remove extra delimiter"
