@@ -27,7 +27,7 @@
 
 (defn apply-fix
   "Apply a fix by candidate ID.
-   candidates is a seq of {:id \"A1\" :pos {:row :col :offset} ...}
+   candidates is a seq of {:id \"1\" :pos {:row :col :offset} ...}
    Returns {:ok modified-source} or {:error message}"
   [source candidates position-id delimiter]
   (if-let [candidate (first (filter #(= (:id %) position-id) candidates))]

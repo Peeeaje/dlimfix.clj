@@ -49,33 +49,33 @@ Output:
 ```
 Missing end delimiter: ) (to close '(' at line 1, col 1)
 Candidates:
-  A1) after line 1, col 12: (defn foo []
-  A2) after line 2, col 9: (+ 1 2)
-  A3) after line 3, col 0: [EOF]
+  1) after line 1, col 12: (defn foo []
+  2) after line 2, col 9: (+ 1 2)
+  3) after line 3, col 0: [EOF]
 ```
 
 ### Fix with specific position
 
 ```bash
-clj -M:run --fix file.clj -p A2
+clj -M:run --fix file.clj -p 2
 ```
 
 ### Preview changes (dry-run)
 
 ```bash
-clj -M:run --fix file.clj -p A2 --dry-run
+clj -M:run --fix file.clj -p 2 --dry-run
 ```
 
 ### Write to different file
 
 ```bash
-clj -M:run --fix file.clj -p A2 --out fixed.clj
+clj -M:run --fix file.clj -p 2 --out fixed.clj
 ```
 
 ### Create backup before overwriting
 
 ```bash
-clj -M:run --fix file.clj -p A2 --backup file.bak
+clj -M:run --fix file.clj -p 2 --backup file.bak
 ```
 
 ## Options
@@ -84,7 +84,7 @@ clj -M:run --fix file.clj -p A2 --backup file.bak
 |--------|-------------|
 | `--list` | Show candidate positions for missing delimiters |
 | `--fix` | Apply fix at specified position |
-| `-p, --position ID` | Position ID to fix (e.g., A1) |
+| `-p, --position ID` | Position ID to fix (e.g., 1) |
 | `--dry-run` | Show diff without modifying file |
 | `--out FILE` | Write to different file |
 | `--backup FILE` | Create backup before overwriting |

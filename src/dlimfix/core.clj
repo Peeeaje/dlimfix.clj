@@ -13,7 +13,7 @@
                  :coerce :boolean}
           :fix {:desc "Apply fix at specified position"
                 :coerce :boolean}
-          :position {:desc "Position ID to fix (e.g., A1)"
+          :position {:desc "Position ID to fix (e.g., 1)"
                      :alias :p}
           :dry-run {:desc "Show diff without modifying file"
                     :coerce :boolean}

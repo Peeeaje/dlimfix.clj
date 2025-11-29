@@ -61,15 +61,15 @@
          :context (str/trim (get lines (dec row) ""))}))))
 
 (defn- assign-ids
-  "Assign sequential IDs (A1, A2, ...) to candidates."
+  "Assign sequential numeric IDs (1, 2, ...) to candidates."
   [candidates]
-  (map-indexed (fn [i c] (assoc c :id (str "A" (inc i)))) candidates))
+  (map-indexed (fn [i c] (assoc c :id (str (inc i)))) candidates))
 
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
    missing: {:expected \")\" :opened \"(\" :opened-loc {:row :col}}
    source: the original source string
-   Returns: [{:id \"A1\" :pos {:row :col :offset} :context \"...\"}]"
+   Returns: [{:id \"1\" :pos {:row :col :offset} :context \"...\"}]"
   [{:keys [expected opened-loc] :as missing} source]
   (let [lines (vec (str/split source #"\n" -1))
         start-row (:row opened-loc)

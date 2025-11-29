@@ -45,8 +45,8 @@
 
 (deftest apply-fix-test
   (testing "Apply fix by candidate ID"
-    (let [candidates [{:id "A1" :pos {:row 1 :col 5 :offset 4}}
-                      {:id "A2" :pos {:row 1 :col 7 :offset 6}}]]
-      (is (= {:ok "(+ 1) 2"} (fixer/apply-fix "(+ 1 2" candidates "A1" ")")))
-      (is (= {:ok "(+ 1 2)"} (fixer/apply-fix "(+ 1 2" candidates "A2" ")")))
-      (is (= {:error "Unknown position ID: A3"} (fixer/apply-fix "(+ 1 2" candidates "A3" ")"))))))
+    (let [candidates [{:id "1" :pos {:row 1 :col 5 :offset 4}}
+                      {:id "2" :pos {:row 1 :col 7 :offset 6}}]]
+      (is (= {:ok "(+ 1) 2"} (fixer/apply-fix "(+ 1 2" candidates "1" ")")))
+      (is (= {:ok "(+ 1 2)"} (fixer/apply-fix "(+ 1 2" candidates "2" ")")))
+      (is (= {:error "Unknown position ID: 3"} (fixer/apply-fix "(+ 1 2" candidates "3" ")"))))))

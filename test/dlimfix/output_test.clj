@@ -10,15 +10,15 @@
 (deftest format-list-test
   (testing "Contains required elements"
     (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 5}}
-          candidates [{:id "A1" :pos {:row 2 :col 10} :context "(+ x y)"}
-                      {:id "A2" :pos {:row 3 :col 1} :context ""}]
+          candidates [{:id "1" :pos {:row 2 :col 10} :context "(+ x y)"}
+                      {:id "2" :pos {:row 3 :col 1} :context ""}]
           result (output/format-list missing candidates)]
       ;; Check structure, not exact string
       (is (str/includes? result "Missing end delimiter"))
       (is (str/includes? result ")"))
       (is (str/includes? result "line 1"))
-      (is (str/includes? result "A1)"))
-      (is (str/includes? result "A2)"))
+      (is (str/includes? result "1)"))
+      (is (str/includes? result "2)"))
       (is (str/includes? result "[EOF]")))))
 
 (deftest format-diff-test

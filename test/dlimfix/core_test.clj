@@ -23,12 +23,12 @@
 
 (deftest run-fix-valid-file
   (testing "--fix with valid file returns no-missing message"
-    (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "A1"})]
+    (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "1"})]
       (is (= 0 (:code result)))
       (is (= "No missing end delimiters found." (:output result)))))
 
   (testing "--fix --dry-run with valid file also returns no-missing"
-    (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "A1" :dry-run true})]
+    (let [result (core/run {:fix true :file "test-resources/valid.clj" :position "1" :dry-run true})]
       (is (= 0 (:code result)))
       (is (= "No missing end delimiters found." (:output result))))))
 

@@ -9,7 +9,7 @@
           missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
           cands (candidates/generate-candidates missing source)]
       (is (>= (count cands) 1))
-      (is (= "A1" (:id (first cands))))))
+      (is (= "1" (:id (first cands))))))
 
   (testing "Missing ) - multi-line"
     (let [source "(let [x 1]\n  (+ x"
