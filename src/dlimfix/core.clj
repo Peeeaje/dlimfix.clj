@@ -42,7 +42,7 @@
           cands (candidates/generate-candidates missing source)]
       (if (empty? cands)
         {:output "Missing delimiter detected but no valid insertion points found." :code 2}
-        {:output (output/format-list missing cands) :code 0}))))
+        {:output (output/format-list missing cands) :code 1}))))
 
 (defn- write-output
   "Write modified content to file or stdout."

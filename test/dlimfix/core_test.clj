@@ -10,9 +10,9 @@
       (is (= "No missing end delimiters found." (:output result))))))
 
 (deftest run-list-missing-file
-  (testing "--list with missing delimiter file returns candidates"
+  (testing "--list with missing delimiter file returns candidates with non-zero exit code"
     (let [result (core/run {:list true :file "test-resources/single-missing.txt"})]
-      (is (= 0 (:code result)))
+      (is (= 1 (:code result)) "Should return exit code 1 when missing delimiter is found")
       (is (str/includes? (:output result) "Missing end delimiter")))))
 
 (deftest run-fix-no-position
