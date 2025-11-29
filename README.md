@@ -15,23 +15,23 @@ A CLI tool that fixes missing end delimiters in Clojure code.
 Requires [Clojure CLI tools](https://clojure.org/guides/install_clojure).
 
 ```bash
-git clone https://github.com/yourname/dlimfix.clj
+git clone https://github.com/Peeeaje/dlimfix.clj
 cd dlimfix.clj
 ```
 
 ### bbin (Babashka) install
 
-`bbin` が入っていれば、リポジトリから直接インストールできます。
+when `bbin` is installed, you can install `dlimfix` via:
 
 ```bash
-# GitHub 上のリポジトリから
-bbin install git+https://github.com/yourname/dlimfix.clj
+# from GitHub
+bbin install https://github.com/Peeeaje/dlimfix.clj.git --as dlimfix
 
-# またはローカルクローンから
+# from local directory
 bbin install .
 ```
 
-インストール後は `dlimfix` コマンドとして使えます:
+After installation, you can run:
 
 ```bash
 dlimfix file.clj
