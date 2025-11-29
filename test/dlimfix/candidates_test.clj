@@ -80,6 +80,21 @@
       (is (vector? cands))
       (is (= 0 (count cands))))))
 
+(deftest require-vector-missing-bracket
+  (testing "BUG-002: Missing ] after :as alias should not split tokens"
+    (let [source "(:require [clojure.set :as set]\n            [clojure.string :as str))"
+          missing {:expected "]" :opened "[" :opened-loc {:row 2 :col 13}}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; Only the correct position (end of line) should be suggested
+      ;; col 36 is after "str", before "))"
+      (let [first-cand (first cands)
+            first-col (get-in first-cand [:pos :col])]
+        (is (= 36 first-col) "First candidate should be at end of :as form"))
+      ;; Should not have candidates that split "[clojure.string :as str]"
+      (let [bad-positions (filter #(contains? #{28 32} (get-in % [:pos :col])) cands)]
+        (is (empty? bad-positions) "Should not generate candidates that split :as forms")))))
+
 (deftest mismatched-delimiter-priority
   (testing "Mismatched ] instead of ) - position before ] should be first"
     (let [source "result (+ x y z]"
