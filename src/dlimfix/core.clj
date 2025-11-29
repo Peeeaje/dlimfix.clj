@@ -19,7 +19,7 @@
           :dry-run {:desc "Show diff without modifying file"
                     :coerce :boolean}
           :out {:desc "Output file path (instead of overwriting)"}
-          :backup {:desc "Create backup before overwriting"}}
+}
    :args->opts [:file]})
 
 (defn- read-and-parse
@@ -60,7 +60,7 @@
 (defn- write-output
   "Write modified content to file or stdout.
    After writing (not dry-run), re-parses to check for remaining errors."
-  [{:keys [source file-path modified dry-run out-path backup-path]}]
+  [{:keys [source file-path modified dry-run out-path]}]
   (let [diff (output/format-diff source modified file-path)]
     (cond
       dry-run
@@ -76,9 +76,7 @@
              :code (if has-errors 1 0)}))
 
       :else
-      (do (when backup-path
-            (io/copy (io/file file-path) (io/file backup-path)))
-          (spit file-path modified :encoding "UTF-8")
+      (do (spit file-path modified :encoding "UTF-8")
           (let [{:keys [remaining-output has-errors]} (check-remaining-errors modified)
                 output-parts (cond-> ["Fixed."]
                                remaining-output (conj remaining-output))]
@@ -87,7 +85,7 @@
 
 (defn- handle-fix
   "Handle --fix mode. Returns {:output :code}."
-  [{:keys [source result]} {:keys [file position dry-run out backup]}]
+  [{:keys [source result]} {:keys [file position dry-run out]}]
   (cond
     (nil? position)
     {:output "Missing --position (-p) argument" :code 1}
@@ -115,8 +113,7 @@
                        :file-path file
                        :modified (:ok fix-result)
                        :dry-run dry-run
-                       :out-path out
-                       :backup-path backup})))))
+                       :out-path out})))))
 
 (defn- print-usage []
   (println "Usage: dlimfix [options] <file.clj>")
@@ -128,7 +125,7 @@
   (println "  --fix -p <ID>    Apply fix at position ID")
   (println "  --dry-run        Show diff without modifying")
   (println "  --out <file>     Write to different file")
-  (println "  --backup <file>  Create backup before overwriting"))
+)
 
 (defn run
   "Main logic without System/exit. Returns {:output :code}."

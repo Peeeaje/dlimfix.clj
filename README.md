@@ -34,15 +34,15 @@ bbin install .
 インストール後は `dlimfix` コマンドとして使えます:
 
 ```bash
-dlimfix --list file.clj
+dlimfix file.clj
 ```
 
 ## Usage
 
-### List candidates
+### List candidates (default)
 
 ```bash
-clj -M:run --list file.clj
+clj -M:run file.clj
 ```
 
 Output:
@@ -72,22 +72,15 @@ clj -M:run --fix file.clj -p 2 --dry-run
 clj -M:run --fix file.clj -p 2 --out fixed.clj
 ```
 
-### Create backup before overwriting
-
-```bash
-clj -M:run --fix file.clj -p 2 --backup file.bak
-```
-
 ## Options
 
 | Option | Description |
 |--------|-------------|
-| `--list` | Show candidate positions for missing delimiters |
+| `--list` | Show candidate positions for missing delimiters (default) |
 | `--fix` | Apply fix at specified position |
 | `-p, --position ID` | Position ID to fix (e.g., 1) |
 | `--dry-run` | Show diff without modifying file |
 | `--out FILE` | Write to different file |
-| `--backup FILE` | Create backup before overwriting |
 
 ## Exit Codes
 
