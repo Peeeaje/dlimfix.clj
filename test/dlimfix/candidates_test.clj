@@ -277,6 +277,26 @@
           cands (candidates/generate-candidates missing source)]
       (is (>= (count cands) 1)))))
 
+(deftest no-duplicate-display-candidates
+  (testing "Should not have multiple candidates with same line and context"
+    ;; When multiple insertion points exist on the same line,
+    ;; only one should be shown (they look identical in output)
+    (let [source ";; Comment line\n(defn foo []"
+          missing {:expected ")" :opened "(" :opened-loc {:row 2 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          ;; Group by (row, context) - should have no duplicates
+          display-keys (map #(vector (get-in % [:pos :row]) (:context %)) cands)]
+      (is (= (count display-keys) (count (distinct display-keys)))
+          "Each (row, context) pair should appear only once")))
+
+  (testing "Long line with many tokens should not produce duplicates"
+    (let [source "(instance? Character match) (.replace s ^Character match ^Character replacement)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          display-keys (map #(vector (get-in % [:pos :row]) (:context %)) cands)]
+      (is (= (count display-keys) (count (distinct display-keys)))
+          "Should not have duplicate display entries"))))
+
 (deftest skip-balanced-subforms
   (testing "Should not suggest positions inside balanced subforms"
     ;; (let [x 1]

@@ -354,8 +354,12 @@
             ;; Collect offsets for redundancy check
             offsets-seen (set (map #(get-in % [:pos :offset]) raw-candidates))
             ;; Second pass: filter out redundant EOF candidates
-            insert-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
-                                      raw-candidates)
+            non-eof-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
+                                       raw-candidates)
+            ;; Third pass: remove display duplicates (same row + context)
+            ;; Keep first occurrence (highest priority position on that line)
+            insert-candidates (distinct-by #(vector (get-in % [:pos :row]) (:context %))
+                                           non-eof-candidates)
             ;; Sort candidates by priority (closer to opened-loc/mismatched-loc = higher priority)
             sorted-candidates (sort-by #(candidate-priority % opened-loc mismatched-loc)
                                        insert-candidates)]
