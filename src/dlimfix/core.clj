@@ -44,23 +44,46 @@
         {:output "Missing delimiter detected but no valid insertion points found." :code 2}
         {:output (output/format-list missing cands) :code 1}))))
 
+(defn- check-remaining-errors
+  "Check if the modified source still has errors.
+   Returns {:remaining-output :has-errors} or nil if no errors."
+  [modified]
+  (let [result (parser/parse-string modified)]
+    (when-not (:ok result)
+      (let [missing (:missing result)
+            cands (candidates/generate-candidates missing modified)]
+        {:remaining-output (if (empty? cands)
+                            "Remaining error: Missing delimiter detected but no valid insertion points found."
+                            (str "Remaining errors:\n" (output/format-list missing cands)))
+         :has-errors true}))))
+
 (defn- write-output
-  "Write modified content to file or stdout."
+  "Write modified content to file or stdout.
+   After writing (not dry-run), re-parses to check for remaining errors."
   [{:keys [source file-path modified dry-run out-path backup-path]}]
-  (cond
-    dry-run
-    (let [diff (output/format-diff source modified file-path)]
-      {:output (or diff "No changes needed.") :code 0})
+  (let [diff (output/format-diff source modified file-path)]
+    (cond
+      dry-run
+      {:output (or diff "No changes needed.")
+       :code 0}
 
-    out-path
-    (do (spit out-path modified :encoding "UTF-8")
-        {:output (str "Written to: " out-path) :code 0})
+      out-path
+      (do (spit out-path modified :encoding "UTF-8")
+          (let [{:keys [remaining-output has-errors]} (check-remaining-errors modified)
+                output-parts (cond-> [(str "Written to: " out-path)]
+                               remaining-output (conj remaining-output))]
+            {:output (apply str (interpose "\n" output-parts))
+             :code (if has-errors 1 0)}))
 
-    :else
-    (do (when backup-path
-          (io/copy (io/file file-path) (io/file backup-path)))
-        (spit file-path modified :encoding "UTF-8")
-        {:output "Fixed." :code 0})))
+      :else
+      (do (when backup-path
+            (io/copy (io/file file-path) (io/file backup-path)))
+          (spit file-path modified :encoding "UTF-8")
+          (let [{:keys [remaining-output has-errors]} (check-remaining-errors modified)
+                output-parts (cond-> ["Fixed."]
+                               remaining-output (conj remaining-output))]
+            {:output (apply str (interpose "\n" output-parts))
+             :code (if has-errors 1 0)})))))
 
 (defn- handle-fix
   "Handle --fix mode. Returns {:output :code}."
