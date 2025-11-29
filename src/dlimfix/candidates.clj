@@ -114,8 +114,14 @@
   [candidates]
   (map-indexed (fn [i c] (assoc c :id (str (inc i)))) candidates))
 
+(defn- creates-clean-parse?
+  "Check if the modified source parses without errors."
+  [test-source]
+  (:ok (parser/parse-string test-source)))
+
 (defn- try-replacement
-  "Try replacing delimiter at mismatched position. Returns candidate or nil."
+  "Try replacing delimiter at mismatched position. Returns candidate or nil.
+   Includes :clean-parse? flag indicating if replacement results in valid code."
   [source expected missing lines {:keys [row col] :as pos}]
   (when-let [offset (fixer/row-col->offset source row col)]
     (let [test-source (fixer/replace-at source offset expected)]
@@ -123,7 +129,8 @@
                 (before-error-loc? pos missing))
         {:pos {:row row :col col :offset offset}
          :context (make-context lines row expected)
-         :type :replace}))))
+         :type :replace
+         :clean-parse? (creates-clean-parse? test-source)}))))
 
 (defn- all-intra-line-positions
   "Generate intra-line positions for all lines from start-row to end-row.
@@ -220,10 +227,19 @@
             insert-candidates (distinct-by #(vector (get-in % [:pos :row]) (:context %))
                                            non-eof-candidates)
             ;; Sort candidates by line number ascending
-            sorted-candidates (sort-by #(get-in % [:pos :row]) insert-candidates)]
-        ;; Replacement candidate comes first if available
-        (->> (if replace-candidate
+            sorted-candidates (sort-by #(get-in % [:pos :row]) insert-candidates)
+            ;; Only put replacement first if it creates a clean parse
+            ;; Otherwise, insert candidates are better choices
+            use-replace-first? (and replace-candidate (:clean-parse? replace-candidate))]
+        (->> (cond
+               use-replace-first?
                (cons replace-candidate sorted-candidates)
+
+               replace-candidate
+               ;; Replace exists but creates remaining errors - put it at end
+               (concat sorted-candidates [replace-candidate])
+
+               :else
                sorted-candidates)
              assign-ids
              vec)))))

@@ -145,16 +145,16 @@
         (is (empty? bad-positions) "Should not generate candidates that split :as forms")))))
 
 (deftest mismatched-closer-replacement
-  (testing "Wrong closer type should generate replacement candidate first"
+  (testing "Wrong closer type should generate replacement candidate"
     (let [source "(+ acc item]"
           missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}
                    :mismatched-loc {:row 1 :col 12} :found "]"}
           cands (candidates/generate-candidates missing source)]
       (is (>= (count cands) 1))
-      ;; First candidate should be a replacement
-      (let [first-cand (first cands)]
-        (is (= :replace (:type first-cand)) "First candidate should be a replacement")
-        (is (= 12 (get-in first-cand [:pos :col])) "Replacement should be at col 12"))))
+      ;; Should have a replacement candidate
+      (let [replace-cands (filter #(= :replace (:type %)) cands)]
+        (is (= 1 (count replace-cands)) "Should have one replacement candidate")
+        (is (= 12 (get-in (first replace-cands) [:pos :col])) "Replacement should be at col 12"))))
 
   (testing "Mismatched } instead of ] generates replacement"
     (let [source "[a b c}"
@@ -300,6 +300,22 @@
           display-keys (map #(vector (get-in % [:pos :row]) (:context %)) cands)]
       (is (= (count display-keys) (count (distinct display-keys)))
           "Should not have duplicate display entries"))))
+
+(deftest replacement-should-not-create-new-errors
+  (testing "When replacement creates remaining errors, insert should be preferred"
+    ;; (def data {:a 1 :b {:c 2 :d 3})
+    ;; Replace ) with } leaves def without closing )
+    ;; Insert } at end fixes everything
+    (let [source "(def data {:a 1 :b {:c 2 :d 3})"
+          missing {:expected "}" :opened "{" :opened-loc {:row 1 :col 11}
+                   :mismatched-loc {:row 1 :col 31} :found ")"}
+          cands (candidates/generate-candidates missing source)]
+      (is (>= (count cands) 1))
+      ;; First candidate should be the one that doesn't create remaining errors
+      ;; which is the insert candidate in this case
+      (let [first-cand (first cands)]
+        (is (= :insert (:type first-cand))
+            "Insert should be first when replacement creates remaining errors")))))
 
 (deftest candidates-ordered-by-line-number
   (testing "Candidates should be ordered by line number in ascending order"
