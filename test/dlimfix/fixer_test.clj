@@ -32,6 +32,17 @@
     (is (= "(+ 1)" (fixer/insert-delimiter "(+ 1" 1 5 ")")))
     (is (= "(let [x 1])" (fixer/insert-delimiter "(let [x 1]" 1 11 ")")))))
 
+(deftest row-col-to-offset-invalid
+  (testing "Invalid row returns nil"
+    (is (nil? (fixer/row-col->offset "abc" 0 1)))
+    (is (nil? (fixer/row-col->offset "abc" 5 1)))
+    (is (nil? (fixer/row-col->offset "abc\ndef" 3 1)))))
+
+(deftest insert-delimiter-invalid
+  (testing "Insert at invalid position returns nil"
+    (is (nil? (fixer/insert-delimiter "abc" 0 1 ")")))
+    (is (nil? (fixer/insert-delimiter "abc" 5 1 ")")))))
+
 (deftest apply-fix-test
   (testing "Apply fix by candidate ID"
     (let [candidates [{:id "A1" :pos {:row 1 :col 5 :offset 4}}

@@ -1,0 +1,36 @@
+(ns dlimfix.output-test
+  (:require [clojure.test :refer [deftest is testing]]
+            [clojure.string :as str]
+            [dlimfix.output :as output]))
+
+(deftest format-no-missing-test
+  (testing "Returns expected message"
+    (is (= "No missing end delimiters found." (output/format-no-missing)))))
+
+(deftest format-list-test
+  (testing "Contains required elements"
+    (let [missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 5}}
+          candidates [{:id "A1" :pos {:row 2 :col 10} :context "(+ x y)"}
+                      {:id "A2" :pos {:row 3 :col 1} :context ""}]
+          result (output/format-list missing candidates)]
+      ;; Check structure, not exact string
+      (is (str/includes? result "Missing end delimiter"))
+      (is (str/includes? result ")"))
+      (is (str/includes? result "line 1"))
+      (is (str/includes? result "A1)"))
+      (is (str/includes? result "A2)"))
+      (is (str/includes? result "[EOF]")))))
+
+(deftest format-diff-test
+  (testing "Returns nil when no changes"
+    (is (nil? (output/format-diff "abc" "abc" "test.clj"))))
+
+  (testing "Returns diff when changes exist"
+    (let [result (output/format-diff "(+ 1" "(+ 1)" "test.clj")]
+      (is (some? result))
+      (is (str/includes? result "---"))
+      (is (str/includes? result "+++"))))
+
+  (testing "Shows added content with +"
+    (let [result (output/format-diff "abc" "abc)" "test.clj")]
+      (is (str/includes? result "+")))))
