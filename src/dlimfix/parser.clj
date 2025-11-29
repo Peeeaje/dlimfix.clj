@@ -9,6 +9,19 @@
   (when-let [[_ found] (re-find #"Unmatched delimiter: (.)" message)]
     found))
 
+(def ^:private parse-opts
+  "Options for edamame parser.
+   - :all true - parse all forms
+   - :end-location true - include end location metadata
+   - :auto-resolve - resolve :: keywords
+   - :read-cond :allow - allow reader conditionals (#? and #?@)
+   - :features #{:clj :cljs} - supported reader conditional features"
+  {:all true
+   :end-location true
+   :auto-resolve '{:current user}
+   :read-cond :allow
+   :features #{:clj :cljs}})
+
 (defn parse-string
   "Parse a Clojure source string.
    Returns:
@@ -18,9 +31,7 @@
    - {:error message} on fatal parse error"
   [source]
   (try
-    {:ok (e/parse-string-all source {:all true
-                                      :end-location true
-                                      :auto-resolve '{:current user}})}
+    {:ok (e/parse-string-all source parse-opts)}
     (catch Exception ex
       (let [data (ex-data ex)
             message (.getMessage ex)]

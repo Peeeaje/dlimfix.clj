@@ -96,3 +96,17 @@
       (is (= ")" (get-in result [:missing :expected])))
       (is (= {:row 1 :col 10} (get-in result [:missing :mismatched-loc])))
       (is (= "}" (get-in result [:missing :found]))))))
+
+(deftest parse-reader-conditional
+  (testing "BUG-006: Reader conditional #? should be allowed"
+    (let [result (parser/parse-string "#?(:clj (println \"clj\") :cljs (println \"cljs\"))")]
+      (is (:ok result))))
+
+  (testing "Reader conditional with missing paren is detected"
+    (let [result (parser/parse-string "#?(:clj (println \"hi\")")]
+      (is (:missing result))
+      (is (= ")" (get-in result [:missing :expected])))))
+
+  (testing "Reader conditional splicing #?@ should be allowed"
+    (let [result (parser/parse-string "[1 #?@(:clj [2 3] :cljs [4 5]) 6]")]
+      (is (:ok result)))))
