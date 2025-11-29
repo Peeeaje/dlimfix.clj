@@ -76,8 +76,8 @@
           ;; Missing closing paren for (+ 1 2, fix adds ) at end
           content "(defn foo []\n  (+ 1 2)"]
       (spit test-file content)
-      ;; Use position 5 which adds ) at end of (+ 1 2
-      (let [result (core/run {:fix true :file test-file :position "5" :out out-file})]
+      ;; Use position 1 which adds ) at end of (+ 1 2
+      (let [result (core/run {:fix true :file test-file :position "1" :out out-file})]
         (is (str/includes? (:output result) "Written to:") "Should confirm file written")
         (is (not (str/includes? (:output result) "Remaining")) "Should not show remaining errors")
         (is (= 0 (:code result)) "Should return zero when fix is complete"))))

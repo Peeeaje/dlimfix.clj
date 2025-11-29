@@ -152,39 +152,74 @@
 (defn- intra-line-positions
   "Generate positions within a line after token boundaries.
    Scans from start-col to end of line, finding positions after non-whitespace.
+   Skips over balanced subforms (parentheses, brackets, braces).
    expected: the expected closing delimiter (e.g., \")\", \"]\", \"}\")"
   [line row start-col expected]
   (let [len (count line)]
     (loop [col start-col
            in-token? false
+           depth-stack []  ;; Stack of opening delimiters to track nesting
            positions []]
       (if (> col len)
         positions
         (let [ch (get line (dec col))
               whitespace? (Character/isWhitespace ch)
+              opening-delim? (#{\( \[ \{} ch)
               closing-delim? (#{\) \] \}} ch)
-              mismatched-delim? (and closing-delim?
-                                     (not (matching-delimiter? ch expected)))]
+              expected-closer (case (peek depth-stack)
+                                \( \) \[ \] \{ \} nil)
+              inside-subform? (seq depth-stack)
+              ;; Mark as mismatched if closing delimiter doesn't match what we expect
+              ;; At top level: doesn't match expected (what we're looking for)
+              ;; Inside subform: doesn't match expected-closer (what would close the subform)
+              mismatched-at-top? (and closing-delim?
+                                      (not inside-subform?)
+                                      (not (matching-delimiter? ch expected)))
+              mismatched-in-subform? (and closing-delim?
+                                          inside-subform?
+                                          (not= ch expected-closer))]
           (cond
-            ;; Mismatched closing delimiter found - this is the most likely position
-            mismatched-delim?
+            ;; Opening delimiter found - push to stack
+            opening-delim?
+            (recur (inc col) false (conj depth-stack ch) positions)
+
+            ;; Closing delimiter that matches current subform - pop stack and record position
+            (and closing-delim? inside-subform? (= ch expected-closer))
+            (let [new-stack (pop depth-stack)]
+              (if (empty? new-stack)
+                ;; Exited to top level - record position after this closer
+                (recur (inc col) false new-stack (conj positions {:row row :col (inc col)}))
+                ;; Still inside a subform - just continue
+                (recur (inc col) false new-stack positions)))
+
+            ;; Mismatched closing delimiter inside subform - this is a likely error position
+            ;; Record position before it and stop (like mismatched at top level)
+            mismatched-in-subform?
             (conj positions {:row row :col col :priority true})
 
-            ;; End of token -> check if we should skip
+            ;; Mismatched closing delimiter at top level - this is the most likely position
+            mismatched-at-top?
+            (conj positions {:row row :col col :priority true})
+
+            ;; Inside a subform - skip everything until it closes
+            inside-subform?
+            (recur (inc col) in-token? depth-stack positions)
+
+            ;; End of token at top level -> check if we should skip
             (and in-token? (or whitespace? closing-delim?))
             (if-let [skip-info (should-skip-position? line col)]
               ;; Skip the token after special keywords like :as
-              (recur (:to skip-info) false positions)
+              (recur (:to skip-info) false depth-stack positions)
               ;; Normal case - record position
-              (recur (inc col) false (conj positions {:row row :col col})))
+              (recur (inc col) false depth-stack (conj positions {:row row :col col})))
 
-            ;; Skip whitespace and matching closing delimiters
+            ;; Skip whitespace and matching closing delimiters at top level
             (or whitespace? closing-delim?)
-            (recur (inc col) false positions)
+            (recur (inc col) false depth-stack positions)
 
-            ;; Inside a token
+            ;; Inside a token at top level
             :else
-            (recur (inc col) true positions)))))))
+            (recur (inc col) true depth-stack positions)))))))
 
 (defn- try-insert-at
   "Try inserting delimiter at position. Returns candidate or nil."
@@ -226,6 +261,20 @@
   "Maximum number of candidates to return."
   20)
 
+(defn- redundant-eof-candidate?
+  "Check if this is an EOF candidate that's redundant with a line-end candidate.
+   An EOF candidate (row N, col 1 on empty line) is redundant if there's already
+   a candidate at the end of the previous line."
+  [candidate lines offsets-seen]
+  (let [{:keys [row col]} (:pos candidate)
+        line (get lines (dec row))]
+    ;; EOF candidate: col 1 on an empty line (or line that's just whitespace)
+    (and (= col 1)
+         (or (nil? line) (str/blank? line))
+         ;; Check if there's already a candidate at offset-1 (end of previous line)
+         (let [this-offset (get-in candidate [:pos :offset])]
+           (contains? offsets-seen (dec this-offset))))))
+
 (defn generate-candidates
   "Generate candidate positions for a missing delimiter.
    missing: {:expected \")\" :opened \"(\" :opened-loc {:row :col}
@@ -255,10 +304,16 @@
               priority-positions (filter :priority mid-positions)
               regular-positions (remove :priority mid-positions)
               positions (concat priority-positions regular-positions end-positions)
-              insert-candidates (->> positions
-                                     (keep #(try-insert-at source expected missing lines %))
-                                     (distinct-by #(get-in % [:pos :offset]))
-                                     (map #(assoc % :type :insert)))]
+              ;; First pass: collect all valid candidates with their offsets
+              raw-candidates (->> positions
+                                  (keep #(try-insert-at source expected missing lines %))
+                                  (distinct-by #(get-in % [:pos :offset]))
+                                  (map #(assoc % :type :insert)))
+              ;; Collect offsets for redundancy check
+              offsets-seen (set (map #(get-in % [:pos :offset]) raw-candidates))
+              ;; Second pass: filter out redundant EOF candidates
+              insert-candidates (remove #(redundant-eof-candidate? % lines offsets-seen)
+                                        raw-candidates)]
           ;; Replacement candidate comes first if available, limit to max-candidates
           (->> (if replace-candidate
                  (cons replace-candidate insert-candidates)

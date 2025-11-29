@@ -193,10 +193,64 @@
       (let [early-cands (filter #(< (get-in % [:pos :row]) 4) cands)]
         (is (>= (count early-cands) 1) "Should have candidates before the opened-loc line"))))
 
-  (testing "Candidates should include line 3 (after the actual form ends)"
+  (testing "Candidates should include position after first defn ends"
     (let [source "(defn foo []\n  (+ 1 2)\n\n(defn bar []\n  (println \"hi\"))"
           missing {:expected ")" :opened "(" :opened-loc {:row 4 :col 1}}
           cands (candidates/generate-candidates missing source)
-          ;; Line 3 (empty line before defn bar) should be a candidate
+          ;; Line 2 end (after (+ 1 2)) or line 3 (empty line) should be a candidate
+          ;; With redundant EOF filtering, line 3 col 1 may be excluded if line 2 end exists
+          line2-end-cands (filter #(and (= (get-in % [:pos :row]) 2)
+                                        (= (get-in % [:pos :col]) 10)) cands)
           line3-cands (filter #(= (get-in % [:pos :row]) 3) cands)]
-      (is (>= (count line3-cands) 1) "Should have candidate at line 3"))))
+      (is (or (>= (count line2-end-cands) 1)
+              (>= (count line3-cands) 1))
+          "Should have candidate at line 2 end or line 3"))))
+
+(deftest skip-balanced-subforms
+  (testing "Should not suggest positions inside balanced subforms"
+    ;; (let [x 1]
+    ;;   (+ x 2)
+    ;; Missing ) for the outer (let ...)
+    ;; Should NOT suggest inside [x 1] or (+ x 2)
+    (let [source "(let [x 1]\n  (+ x 2)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)]
+      ;; Should have candidates, but none inside the balanced forms
+      (is (>= (count cands) 1))
+      ;; Invalid positions: inside [x 1] would be col 6, 7, 8 on row 1
+      ;; Invalid positions: inside (+ x 2) would be col 4, 5, 6, 7, 8, 9 on row 2
+      (let [row1-cands (filter #(= 1 (get-in % [:pos :row])) cands)
+            row1-cols (set (map #(get-in % [:pos :col]) row1-cands))]
+        ;; col 8 is after "x", inside [x 1] - should not be a candidate
+        (is (not (contains? row1-cols 8)) "Should not suggest inside [x 1]"))
+      (let [row2-cands (filter #(= 2 (get-in % [:pos :row])) cands)
+            row2-cols (set (map #(get-in % [:pos :col]) row2-cands))]
+        ;; col 5 is after "+", inside (+ x 2) - should not be a candidate
+        (is (not (contains? row2-cols 5)) "Should not suggest inside (+ x 2)")
+        ;; col 7 is after "x", inside (+ x 2) - should not be a candidate
+        (is (not (contains? row2-cols 7)) "Should not suggest inside (+ x 2)"))))
+
+  (testing "Valid positions should be after balanced forms close"
+    (let [source "(let [x 1]\n  (+ x 2)"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          ;; Valid positions:
+          ;; - After [x 1] closes: row 1, col 11 (after ])
+          ;; - After (+ x 2) closes: row 2, col 10 (after ))
+          ;; - End of lines
+          valid-positions #{[1 11] [2 10]}
+          cand-positions (set (map #(vector (get-in % [:pos :row])
+                                             (get-in % [:pos :col])) cands))]
+      ;; At least one valid position should be suggested
+      (is (some valid-positions cand-positions)
+          "Should suggest positions after balanced forms close")))
+
+  (testing "EOF candidate should be merged with line-end when adjacent"
+    ;; With trailing newline, EOF is at row 3 col 1, but line-end is at row 2 col 10
+    ;; These are effectively the same position, so EOF should be excluded
+    (let [source "(let [x 1]\n  (+ x 2)\n"
+          missing {:expected ")" :opened "(" :opened-loc {:row 1 :col 1}}
+          cands (candidates/generate-candidates missing source)
+          eof-cands (filter #(= 3 (get-in % [:pos :row])) cands)]
+      ;; Should not have EOF candidate since line 2 col 10 covers it
+      (is (empty? eof-cands) "Should not have separate EOF candidate when line-end exists"))))
