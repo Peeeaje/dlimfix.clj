@@ -21,101 +21,103 @@
           :backup {:desc "Create backup before overwriting"}}
    :args->opts [:file]})
 
-(defn exit
-  "Exit with code and optional message to stderr."
-  ([code] (System/exit code))
-  ([code message]
-   (binding [*out* *err*]
-     (println message))
-   (System/exit code)))
-
-(defn run-list
-  "Run --list mode: show candidate positions."
+(defn- read-and-parse
+  "Read file and parse it. Returns {:source :result} or {:error :code}."
   [file-path]
-  (when-not (.exists (io/file file-path))
-    (exit 1 (str "File not found: " file-path)))
-  (let [source (slurp file-path :encoding "UTF-8")
-        result (parser/parse-string source)]
-    (cond
-      (:ok result)
-      (do (println (output/format-no-missing))
-          (exit 0))
+  (if-not (.exists (io/file file-path))
+    {:error (str "File not found: " file-path) :code 1}
+    (let [source (slurp file-path :encoding "UTF-8")
+          result (parser/parse-string source)]
+      (if (:error result)
+        {:error (str "Parse error: " (:error result)) :code 2}
+        {:source source :result result}))))
 
-      (:missing result)
-      (let [missing (:missing result)
-            cands (candidates/generate-candidates missing source)]
-        (if (empty? cands)
-          (do (println "Missing delimiter detected but no valid insertion points found.")
-              (exit 2))
-          (do (println (output/format-list missing cands))
-              (exit 0))))
+(defn- handle-list
+  "Handle --list mode. Returns {:output :code}."
+  [{:keys [source result]}]
+  (if (:ok result)
+    {:output (output/format-no-missing) :code 0}
+    (let [missing (:missing result)
+          cands (candidates/generate-candidates missing source)]
+      (if (empty? cands)
+        {:output "Missing delimiter detected but no valid insertion points found." :code 2}
+        {:output (output/format-list missing cands) :code 0}))))
 
-      :else
-      (exit 2 (str "Parse error: " (:error result))))))
+(defn- write-output
+  "Write modified content to file or stdout."
+  [{:keys [source file-path modified dry-run out-path backup-path]}]
+  (cond
+    dry-run
+    {:output (output/format-diff source modified file-path) :code 0}
 
-(defn run-fix
-  "Run --fix mode: apply fix at specified position."
-  [file-path position dry-run out-path backup-path]
-  (when-not position
-    (exit 1 "Missing --position (-p) argument"))
-  (when-not (.exists (io/file file-path))
-    (exit 1 (str "File not found: " file-path)))
-  (let [source (slurp file-path :encoding "UTF-8")
-        result (parser/parse-string source)]
-    (cond
-      (:ok result)
-      (do (println (output/format-no-missing))
-          (exit 0))
+    out-path
+    (do (spit out-path modified :encoding "UTF-8")
+        {:output (str "Written to: " out-path) :code 0})
 
-      (:missing result)
-      (let [missing (:missing result)
-            cands (candidates/generate-candidates missing source)
-            fix-result (fixer/apply-fix source cands position (:expected missing))]
-        (if (:error fix-result)
-          (exit 1 (:error fix-result))
-          (let [modified (:ok fix-result)]
-            (cond
-              dry-run
-              (do (println (output/format-diff source modified file-path))
-                  (exit 0))
+    :else
+    (do (when backup-path
+          (io/copy (io/file file-path) (io/file backup-path)))
+        (spit file-path modified :encoding "UTF-8")
+        {:output "Fixed." :code 0})))
 
-              out-path
-              (do (spit out-path modified :encoding "UTF-8")
-                  (println (str "Written to: " out-path))
-                  (exit 0))
+(defn- handle-fix
+  "Handle --fix mode. Returns {:output :code}."
+  [{:keys [source result]} {:keys [file position dry-run out backup]}]
+  (cond
+    (nil? position)
+    {:output "Missing --position (-p) argument" :code 1}
 
-              :else
-              (do (when backup-path
-                    (io/copy (io/file file-path) (io/file backup-path)))
-                  (spit file-path modified :encoding "UTF-8")
-                  (println "Fixed.")
-                  (exit 0))))))
+    (:ok result)
+    {:output (output/format-no-missing) :code 0}
 
-      :else
-      (exit 2 (str "Parse error: " (:error result))))))
+    :else
+    (let [{:keys [expected] :as missing} (:missing result)
+          cands (candidates/generate-candidates missing source)
+          fix-result (fixer/apply-fix source cands position expected)]
+      (if (:error fix-result)
+        {:output (:error fix-result) :code 1}
+        (write-output {:source source
+                       :file-path file
+                       :modified (:ok fix-result)
+                       :dry-run dry-run
+                       :out-path out
+                       :backup-path backup})))))
+
+(defn- print-usage []
+  (println "Usage: dlimfix [--list|--fix] <file.clj>")
+  (println "Options:")
+  (println "  --list           Show candidate positions")
+  (println "  --fix -p <ID>    Apply fix at position ID")
+  (println "  --dry-run        Show diff without modifying")
+  (println "  --out <file>     Write to different file")
+  (println "  --backup <file>  Create backup before overwriting"))
+
+(defn run
+  "Main logic without System/exit. Returns {:output :code}."
+  [{:keys [list fix file] :as opts}]
+  (cond
+    (nil? file)
+    (do (print-usage)
+        {:output nil :code 1})
+
+    (not (or list fix))
+    {:output "Specify --list or --fix" :code 1}
+
+    :else
+    (let [parsed (read-and-parse file)]
+      (if (:error parsed)
+        {:output (:error parsed) :code (:code parsed)}
+        (if list
+          (handle-list parsed)
+          (handle-fix parsed opts))))))
 
 (defn -main
   "CLI entry point."
   [& args]
   (let [opts (cli/parse-opts args cli-spec)
-        {:keys [list fix position dry-run out backup file]} opts]
-    (cond
-      (nil? file)
-      (do (println "Usage: dlimfix [--list|--fix] <file.clj>")
-          (println "Options:")
-          (println "  --list           Show candidate positions")
-          (println "  --fix -p <ID>    Apply fix at position ID")
-          (println "  --dry-run        Show diff without modifying")
-          (println "  --out <file>     Write to different file")
-          (println "  --backup <file>  Create backup before overwriting")
-          (exit 1))
-
-      list
-      (run-list file)
-
-      fix
-      (run-fix file position dry-run out backup)
-
-      :else
-      (do (println "Specify --list or --fix")
-          (exit 1)))))
+        {:keys [output code]} (run opts)]
+    (when output
+      (if (pos? code)
+        (binding [*out* *err*] (println output))
+        (println output)))
+    (System/exit code)))
